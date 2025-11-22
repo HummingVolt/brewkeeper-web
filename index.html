@@ -53,18 +53,16 @@
       const EARLY_REDEMPTION_THRESHOLD = 8;
       const LOCAL_STORAGE_KEY = 'coffeeShopCustomers';
 
-      const loadCustomers = () => {
-        try {
-          const json = localStorage.getItem(LOCAL_STORAGE_KEY);
-          return json ? JSON.parse(json) : [];
-        } catch (e) {
-          console.error(e);
-          return [];
-        }
-      };
-      const saveCustomers = (customers) => {
-        try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(customers)); } catch(e){ console.error(e); }
-      };
+      const loadCustomers = async () => {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCustomers();
+  });
+};
+      const saveCustomer = async (customer) => {
+  return new Promise((resolve, reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveCustomer(customer);
+  });
+};
 
       const Icon = ({ name, size=24, className='' })=>{
         const icons = {
