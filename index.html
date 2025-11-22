@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      :root{
+        --color-coffee-primary: #6F4E37;
+        --color-coffee-dark: #4B3621;
+        --color-grey-dark: #0f1720;
+        --color-grey-medium: #374151;
+        --color-grey-border: #4B5563;
+      }
+      body{ background:var(--color-grey-dark); margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+      ::-webkit-scrollbar{ width:6px; }
+      ::-webkit-scrollbar-track{ background:var(--color-grey-dark); }
+      ::-webkit-scrollbar-thumb{ background:var(--color-grey-medium); border-radius:10px; }
+      input{ font-size:16px; }
+      .stamp-filled{ background-color:var(--color-coffee-primary) !important; color:#fff !important; box-shadow:0 0 10px rgba(111,78,55,0.5) !important; border:2px solid var(--color-coffee-dark) !important; }
+      .stamp-empty{ background-color:var(--color-grey-medium) !important; color:#9ca3af !important; border:2px solid var(--color-grey-border) !important; }
+      .stamp-filled svg{ fill:currentColor !important; }
+      .stamp-empty svg{ fill:none !important; }
+      input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+      input[type="number"]{ -moz-appearance:textfield; }
+
+      /* Activity color classes (description text) */
+      .activity-payment  { color: #34D399; } /* emerald-400 for payment description */
+      .activity-credit   { color: #60A5FA; } /* sky-400 for credit description */
+      .activity-redeem   { color: #C084FC; } /* purple-400 for redeem description */
+      .activity-stamp    { color: #FBBF24; } /* amber-400 for stamp description */
+      .activity-default  { color: #E5E7EB; } /* gray-200 fallback for description */
+
+      /* Amount style: neutral but bolder for emphasis */
+      .amount {
+        color: #d1d5db; /* Tailwind gray-300 */
+        font-weight: 800;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const FREE_ITEM_THRESHOLD = 9;
+      const EARLY_REDEMPTION_THRESHOLD = 8;
+      const LOCAL_STORAGE_KEY = 'coffeeShopCustomers';
+
+      const loadCustomers = () => {
+        try {
+          const json = localStorage.getItem(LOCAL_STORAGE_KEY);
+          return json ? JSON.parse(json) : [];
+        } catch (e) {
+          console.error(e);
+          return [];
+        }
+      };
+      const saveCustomers = (customers) => {
+        try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(customers)); } catch(e){ console.error(e); }
+      };
+
+      const Icon = ({ name, size=24, className='' })=>{
+        const icons = {
+          coffee: <path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-3-4Z M6 1v3 M10 1v3 M14 1v3"/>,
+          creditCard: <><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></>,
+          plus: <path d="M5 12h14M12 5v14" />,
+          minus: <path d="M5 12h14" />,
+          chevronLeft: <path d="m15 18-6-6 6-6" />,
+          search: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>,
+          trash2: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />,
+          gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 4 12 8 12 8s1-4 4.5-4a2.5 2.5 0 0 1 0 5" /><path d="M12 12h.01" /></>,
+          wallet: <><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></>,
+          checkCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
+          alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></>,
+          star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        };
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            {icons[name] || <circle cx="12" cy="12" r="10" />}
+          </svg>
+        );
+      };
+
+      const formatDateTime = (iso) => {
+        const d = new Date(iso);
+        return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+      };
+
+      const Button = ({ children, onClick, variant='primary', className='', disabled=false, type='button' })=>{
+        const base = "px-4 py-3 rounded-xl font-semibold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm";
+        const styles = {
+          primary: `bg-[var(--color-coffee-primary)] text-white hover:bg-[var(--color-coffee-dark)]`,
+          secondary: `bg-[var(--color-grey-medium)] text-white border border-[var(--color-grey-border)] hover:bg-stone-600`
+        };
+        return <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles[variant] || styles.secondary} ${className}`}>{children}</button>;
+      };
+
+      const Card = ({ children, className='' }) => <div className={`bg-[var(--color-grey-medium)] rounded-2xl shadow-lg border border-[var(--color-grey-border)] ${className}`}>{children}</div>;
+
+      // History row (used in both history page and recent activity)
+      const HistoryRow = ({ item }) => {
+        let activityClass = 'activity-default';
+        if (item.type === 'payment') activityClass = 'activity-payment';
+        else if (item.type === 'redeem') activityClass = 'activity-redeem';
+        else if (item.type === 'purchase') {
+          if (item.subType === 'credit') activityClass = 'activity-credit';
+          else if (item.subType === 'stamp_only' || item.subType === 'stamp_skipped') activityClass = 'activity-stamp';
+          else activityClass = 'activity-default';
+        }
+
+        let amountLabel = '';
+        if (item.type === 'payment') amountLabel = `NPR ${Math.abs(item.amount)}`;
+        else if (item.type === 'redeem') amountLabel = 'Free Item';
+        else if (item.type === 'purchase') {
+          if (item.subType === 'credit') amountLabel = `+ NPR ${item.amount}`;
+          else if (item.subType === 'stamp_only') amountLabel = 'Stamp';
+          else if (item.subType === 'stamp_skipped') amountLabel = 'Stamp Skipped';
+          else amountLabel = item.amount ? `NPR ${item.amount}` : '';
+        }
+
+        return (
+          <div className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
+            <div>
+              <p className={`font-medium ${activityClass}`}>{item.description}</p>
+              <p className="text-xs text-gray-400">{formatDateTime(item.date)}</p>
+            </div>
+            <div className="text-sm amount">
+              {amountLabel}
+            </div>
+          </div>
+        );
+      };
+
+      function App(){
+        const [customers, setCustomers] = useState([]);
+        const [view, setView] = useState('list');
+        const [activeCustomerId, setActiveCustomerId] = useState(null);
+        const [searchQuery, setSearchQuery] = useState('');
+        const [newCustomerName, setNewCustomerName] = useState('');
+        const [paymentAmount, setPaymentAmount] = useState('');
+        const [creditAmount, setCreditAmount] = useState('');
+        const [historyFilterDate, setHistoryFilterDate] = useState('');
+        const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+        useEffect(()=>{
+          const raw = loadCustomers();
+          // sanitize and coerce numerical values so advance (negative credit) shows reliably
+          const sanitized = (raw || []).map(c => {
+            const creditVal = Number(c.credit);
+            const credit = Number.isFinite(creditVal) ? creditVal : 0;
+            const stampsVal = Number(c.stamps);
+            const stamps = Number.isFinite(stampsVal) ? Math.max(0, Math.floor(stampsVal)) : 0;
+            return {
+              ...c,
+              id: c.id || (crypto && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random()}`),
+              credit,
+              stamps,
+              skipNextStamp: !!c.skipNextStamp,
+              history: Array.isArray(c.history) ? c.history : []
+            };
+          });
+          setCustomers(sanitized);
+        },[]);
+
+        const persist = (next) => { setCustomers(next); saveCustomers(next); };
+
+        const getActive = () => customers.find(c=>c.id===activeCustomerId);
+
+        const addCustomer = (e)=>{
+          e.preventDefault();
+          if(!newCustomerName.trim()) return;
+          const nc = { id: (crypto && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random()}`), name:newCustomerName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
+          const next = [...customers, nc];
+          persist(next);
+          setNewCustomerName('');
+          setActiveCustomerId(nc.id);
+          setView('detail');
+        };
+
+        const deleteCustomer = (id) => {
+          const next = customers.filter(c => c.id !== id);
+          persist(next);
+          setConfirmDeleteId(null);
+          setActiveCustomerId(null);
+          setView('list');
+        };
+
+        const updateCustomer = (id, updates) => {
+          const next = customers.map(c => c.id === id ? { ...c, ...updates } : c);
+          persist(next);
+        };
+
+        const updateActive = (updates) => updateCustomer(activeCustomerId, updates);
+
+        // Stamp-only: increments stamps, does NOT add credit
+        const stampOnly = () => {
+          const c = getActive();
+          if(!c) return;
+          if(c.skipNextStamp){
+            const entry = { id: Date.now(), date: new Date().toISOString(), type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped (due to earlier early redemption)', amount:0 };
+            updateActive({ skipNextStamp:false, history:[entry, ...c.history] });
+            return;
+          }
+          const newStamps = Math.min(FREE_ITEM_THRESHOLD, c.stamps + 1);
+          // Updated description: "Stamp Added"
+          const entry = { id: Date.now(), date:new Date().toISOString(), type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 };
+          updateActive({ stamps:newStamps, history:[entry, ...c.history] });
+        };
+
+        // Add credit (does NOT affect stamps)
+        const openCreditModal = () => { setCreditAmount(''); setView('credit_modal'); };
+        const submitCredit = () => {
+          const c = getActive();
+          const amount = Number(creditAmount);
+          if(!c || isNaN(amount) || amount<=0) return;
+          const newCredit = c.credit + amount;
+          const entry = { id: Date.now(), date:new Date().toISOString(), type:'purchase', subType:'credit', description:'Credit Added to Tab', amount:amount };
+          updateActive({ credit:newCredit, history:[entry, ...c.history] });
+          setCreditAmount(''); setView('detail');
+        };
+
+        // Redeem free coffee
+        const redeem = () => {
+          const c = getActive();
+          if(!c) return;
+          const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
+          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Coffee Redeemed (next stamp will be skipped)' : 'Free Coffee Redeemed (standard)', amount:0 };
+          updateActive({ stamps:0, skipNextStamp:isEarly, history:[entry, ...c.history] });
+        };
+
+        // Cash received (renamed)
+        const submitPayment = () => {
+          const c = getActive();
+          const amount = Number(paymentAmount);
+          if(!c || isNaN(amount) || amount<=0) return;
+          const newCredit = c.credit - amount;
+          const entry = {
+            id: Date.now(),
+            date: new Date().toISOString(),
+            type: 'payment',
+            description: 'Cash Received',
+            amount: -amount
+          };
+          updateActive({ credit:newCredit, history:[entry, ...c.history] });
+          setPaymentAmount(''); setView('detail');
+        };
+
+        const adjustStamps = (delta) => {
+          const c = getActive();
+          if(!c) return;
+          const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
+          updateActive({ stamps:newStamps });
+        };
+
+        // Render helpers
+        const renderList = ()=>{
+          const filtered = customers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+          return (
+            <div className="max-w-md mx-auto min-h-screen pb-20">
+              <div className="bg-[var(--color-grey-dark)] p-6 sticky top-0 z-10 border-b border-[var(--color-grey-border)]">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
+                    <p className="text-stone-400 text-sm">Loyalty card + credit tab (no cash recording)</p>
+                  </div>
+                  <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full shadow-lg hover:bg-[var(--color-coffee-dark)] transition"><Icon name="plus" size={20} /></button>
+                </div>
+                <div className="relative">
+                  <div className="absolute left-3 top-3 text-gray-400"><Icon name="search" size={18} /></div>
+                  <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 bg-stone-800 text-white rounded-xl border-none focus:ring-2 focus:ring-[var(--color-coffee-primary)] outline-none placeholder-stone-400" />
+                </div>
+              </div>
+
+              {customers.length===0 ? (
+                <div className="p-4 text-center text-gray-400"><p>Welcome — add your first customer.</p></div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {filtered.length===0 ? (
+                    <div className="text-center py-10 text-gray-500"><Icon name="coffee" size={48} className="mx-auto opacity-20" /><p>No customers matching "{searchQuery}"</p></div>
+                  ) : filtered.map(c=>{
+                    // Ensure credit is numeric (sanity)
+                    const credit = Number.isFinite(Number(c.credit)) ? Number(c.credit) : 0;
+                    return (
+                      <div key={c.id} onClick={()=>{ setActiveCustomerId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl shadow-lg border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center">
+                        <div>
+                          <h3 className="font-bold text-white">{c.name}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            {/* Show Due if positive, Advance if negative, Settled otherwise.
+                                Use Math.abs for advance so the amount is visible */}
+                            {credit > 0 ? (
+                              <span className="px-2 py-1 rounded-md text-xs bg-red-900/50 text-red-400 font-bold uppercase">NPR {credit} Due</span>
+                            ) : credit < 0 ? (
+                              <span className="px-2 py-1 rounded-md text-xs bg-emerald-900/50 text-emerald-400 font-bold uppercase">NPR {Math.abs(credit)} Advance</span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-md text-xs bg-stone-700 text-gray-300 font-bold uppercase">Settled</span>
+                            )}
+
+                            <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps} / {FREE_ITEM_THRESHOLD}</span>
+                          </div>
+                        </div>
+                        <Icon name="chevronLeft" className="rotate-180 text-gray-500" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const renderNew = ()=>(
+          <div className="max-w-md mx-auto min-h-screen pb-6">
+            <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 border-b border-[var(--color-grey-border)] flex items-center gap-4">
+              <button onClick={()=>setView('list')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
+              <h2 className="font-bold text-lg text-white">Add New Customer</h2>
+            </div>
+            <form onSubmit={addCustomer} className="p-4 space-y-4">
+              <Card className="p-5 space-y-3">
+                <label className="block text-sm font-medium text-gray-300">Customer Name</label>
+                <input value={newCustomerName} onChange={e=>setNewCustomerName(e.target.value)} required placeholder="e.g. Ram Bahadur" className="w-full p-3 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
+              </Card>
+              <Button type="submit" variant="primary" className="w-full"> <Icon name="plus" /> Create Customer</Button>
+            </form>
+          </div>
+        );
+
+        const renderHistory = ()=>{
+          const c = getActive();
+          if(!c) return null;
+          const filtered = (c.history || []).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).filter(it=> !historyFilterDate ? true : it.date.startsWith(historyFilterDate));
+          return (
+            <div className="max-w-md mx-auto min-h-screen pb-6">
+              <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
+                <button onClick={()=>setView('detail')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
+                <h2 className="font-bold text-lg text-white flex-1 truncate">Activity for {c.name}</h2>
+              </div>
+              <div className="p-4">
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-400 mb-2 uppercase">Filter by date</label>
+                  <input type="date" value={historyFilterDate} onChange={e=>setHistoryFilterDate(e.target.value)} className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none border border-[var(--color-grey-border)]" />
+                  {historyFilterDate && <button onClick={()=>setHistoryFilterDate('')} className="mt-2 text-sm text-red-400">Clear</button>}
+                </div>
+                <div className="space-y-2">
+                  {filtered.length===0 ? <p className="text-center text-gray-500 py-10">No activity</p> : filtered.map(it=> <HistoryRow key={it.id} item={it} />)}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const renderPaymentModal = ()=>{
+          const c = getActive();
+          if(!c) return null;
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-sm p-6">
+                <h3 className="text-xl font-bold text-white">Cash Received</h3>
+                <p className="text-sm text-gray-400">Customer: <span className="font-semibold text-white">{c.name}</span></p>
+                <div>
+                  <label className="text-sm text-gray-300 block mt-3">Amount (NPR)</label>
+                  <input value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} type="number" min="1" step="any" className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none" placeholder="e.g. 500" />
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <Button variant="secondary" onClick={()=>{ setPaymentAmount(''); setView('detail'); }}>Cancel</Button>
+                  <Button variant="primary" onClick={submitPayment} disabled={!paymentAmount || Number(paymentAmount)<=0}><Icon name="checkCircle" /> Cash Received</Button>
+                </div>
+              </Card>
+            </div>
+          );
+        };
+
+        const renderCreditModal = ()=>{
+          const c = getActive();
+          if(!c) return null;
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-sm p-6">
+                <h3 className="text-xl font-bold text-white">Add Credit to Tab</h3>
+                <p className="text-sm text-gray-400">This adds to the customer's tab without awarding a stamp.</p>
+                <div>
+                  <label className="text-sm text-gray-300 block mt-3">Amount (NPR)</label>
+                  <input value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} type="number" min="1" step="any" className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none" placeholder="e.g. 150" />
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <Button variant="secondary" onClick={()=>{ setCreditAmount(''); setView('detail'); }}>Cancel</Button>
+                  <Button variant="primary" onClick={submitCredit} disabled={!creditAmount || Number(creditAmount)<=0}><Icon name="creditCard" /> Add Credit</Button>
+                </div>
+              </Card>
+            </div>
+          );
+        };
+
+        const renderDetail = ()=>{
+          const c = getActive();
+          if(!c) return null;
+          const eligible = c.stamps >= FREE_ITEM_THRESHOLD;
+          const earlyAvailable = c.stamps >= EARLY_REDEMPTION_THRESHOLD && !eligible;
+          return (
+            <div className="max-w-md mx-auto min-h-screen pb-6">
+              <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
+                <button onClick={()=>setView('list')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
+                <h2 className="font-bold text-lg flex-1 truncate text-white">{c.name}</h2>
+                <button onClick={()=>setConfirmDeleteId(c.id)} className="text-red-400 hover:text-red-300"><Icon name="trash2" /></button>
+              </div>
+
+              <div className="p-4 space-y-6">
+                <Card className="p-5">
+                  <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider mb-2">Account Balance</h3>
+                  <div className="flex justify-between items-center">
+                    <p className={`text-4xl font-extrabold ${c.credit>0?'text-red-400':'text-emerald-400'}`}>NPR {Math.abs(c.credit)}</p>
+                    <div className="px-2 py-1 rounded-md text-xs font-bold uppercase leading-none bg-stone-700 text-gray-300">{c.credit>0?'AMOUNT DUE':c.credit<0?'ADVANCE':'CLEARED'}</div>
+                  </div>
+                </Card>
+
+                <Card className="p-5 space-y-4 relative">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Loyalty Card</h3>
+                      <div className="flex items-center gap-3">
+                        <p className="text-2xl font-bold text-[var(--color-coffee-primary)]">{c.stamps} <span className="text-sm font-normal text-stone-400">/ {FREE_ITEM_THRESHOLD}</span></p>
+                        <div className="flex gap-1">
+                          <button onClick={()=>adjustStamps(-1)} disabled={c.stamps<=0} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="minus" size={12} /></button>
+                          <button onClick={()=>adjustStamps(1)} disabled={c.stamps>=FREE_ITEM_THRESHOLD} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="plus" size={12} /></button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="absolute -right-4 -top-4 opacity-10 text-[var(--color-coffee-primary)]"><Icon name="coffee" size={96} /></div>
+                  </div>
+
+                  {c.skipNextStamp && <div className="flex items-center gap-2 p-3 bg-red-900/30 rounded-lg text-red-300 text-xs font-semibold"><Icon name="alertCircle" size={16} /> <p>STAMP SKIPPED: Next purchase will not earn a stamp.</p></div>}
+
+                  <div className="grid grid-cols-5 gap-3 mb-6">
+                    {[...Array(FREE_ITEM_THRESHOLD + 1)].map((_,i)=>{
+                      const isFree = i===FREE_ITEM_THRESHOLD;
+                      const filled = i < c.stamps;
+                      return (
+                        <div key={i} className={`aspect-square rounded-lg flex items-center justify-center ${isFree ? (eligible ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 animate-pulse border-dashed border-2' : 'border-[var(--color-grey-border)] text-stone-600 border-dashed border-2') : (filled ? 'stamp-filled' : 'stamp-empty')}`}>
+                          {isFree ? <Icon name="gift" /> : <Icon name="coffee" size={16} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {eligible && <Button onClick={redeem} variant="primary" className="w-full"><Icon name="gift" /> Redeem Free Coffee</Button>}
+                  {earlyAvailable && <div className="space-y-2"><div className="flex items-start gap-2 p-3 bg-amber-900/30 rounded-lg text-amber-300 text-xs"><Icon name="alertCircle" size={16} /><p>Early redemption available ({c.stamps}/{FREE_ITEM_THRESHOLD}). It will skip the next stamp.</p></div><Button onClick={redeem} variant="secondary" className="w-full text-amber-400 border-amber-900/50 hover:bg-amber-900/30">Redeem Early (Skip Next)</Button></div>}
+                </Card>
+
+                <Card className="p-5 space-y-4">
+                  <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Quick Actions</h3>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button onClick={stampOnly} variant="primary" disabled={c.stamps >= FREE_ITEM_THRESHOLD}><Icon name="coffee" /> Stamp Only</Button>
+                    <Button onClick={openCreditModal} variant="secondary"><Icon name="creditCard" /> Add Credit</Button>
+                    <Button onClick={()=>setView('payment_modal')} variant="secondary" className="col-span-2"><Icon name="wallet" /> Cash Received</Button>
+                  </div>
+                </Card>
+
+                <Card className="p-5 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Recent Activity</h3>
+                    <button onClick={()=>setView('history')} className="text-sm text-gray-300">View All</button>
+                  </div>
+                  <div className="space-y-2">
+                    {(c.history || []).slice(0,3).map(it=> <HistoryRow key={it.id} item={it} />)}
+                    {(c.history||[]).length===0 && <p className="text-center text-gray-500 text-sm pt-4">No recent activity recorded.</p>}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          );
+        };
+
+        const renderDeleteModal = ()=>{
+          if(!confirmDeleteId) return null;
+          const c = customers.find(x=>x.id===confirmDeleteId);
+          if(!c) return null;
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-sm p-6">
+                <h3 className="text-xl font-bold text-red-400">Confirm Deletion</h3>
+                <p className="text-sm text-gray-300 mt-2">Delete profile for <span className="font-semibold text-white">{c.name}</span>? This removes all history.</p>
+                <div className="flex justify-end gap-3 mt-4">
+                  <Button variant="secondary" onClick={()=>setConfirmDeleteId(null)}>Cancel</Button>
+                  <Button variant="primary" onClick={()=>deleteCustomer(c.id)}>Delete</Button>
+                </div>
+              </Card>
+            </div>
+          );
+        };
+
+        let content = null;
+        if(view==='list') content = renderList();
+        else if(view==='new') content = renderNew();
+        else if(view==='detail') content = renderDetail();
+        else if(view==='history') content = renderHistory();
+        else if(view==='payment_modal') content = (<>{renderDetail()}{renderPaymentModal()}</>);
+        else if(view==='credit_modal') content = (<>{renderDetail()}{renderCreditModal()}</>);
+
+        return (
+          <>
+            {content}
+            {confirmDeleteId && renderDeleteModal()}
+            {view==='credit_modal' && renderCreditModal()}
+            {view==='payment_modal' && renderPaymentModal()}
+          </>
+        );
+      }
+
+      ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+  </body>
+</html>
