@@ -10,14 +10,8 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      :root{
-        --color-coffee-primary: #6F4E37;
-        --color-coffee-dark: #4B3621;
-        --color-grey-dark: #0f1720;
-        --color-grey-medium: #374151;
-        --color-grey-border: #4B5563;
-      }
-      body{ background:var(--color-grey-dark); margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+      :root{ --color-coffee-primary: #6F4E37; --color-coffee-dark: #4B3621; --color-grey-dark: #0f1720; --color-grey-medium: #374151; --color-grey-border: #4B5563; }
+      body{ background:var(--color-grey-dark); margin:0; font-family: Inter, system-ui, -apple-system, sans-serif; }
       ::-webkit-scrollbar{ width:6px; }
       ::-webkit-scrollbar-track{ background:var(--color-grey-dark); }
       ::-webkit-scrollbar-thumb{ background:var(--color-grey-medium); border-radius:10px; }
@@ -29,7 +23,7 @@
       input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
       input[type="number"]{ -moz-appearance:textfield; }
 
-      /* Activity color classes */
+      /* Activity colors */
       .activity-payment  { color: #34D399; }
       .activity-credit   { color: #60A5FA; }
       .activity-redeem   { color: #C084FC; }
@@ -40,29 +34,49 @@
       /* Loader */
       .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--color-coffee-primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+      /* Error Box */
+      #error-boundary { display: none; position: fixed; top: 0; left: 0; right: 0; padding: 20px; background: #7f1d1d; color: white; z-index: 9999; font-family: monospace; }
     </style>
   </head>
 
   <body>
+    <!-- This box will show if the app crashes -->
+    <div id="error-boundary">
+      <h3 class="font-bold text-lg mb-2">Something went wrong</h3>
+      <p id="error-message">Unknown error</p>
+      <p class="text-sm mt-2 opacity-75">Check the API_URL configuration or permissions.</p>
+    </div>
+
     <div id="root"></div>
+
+    <!-- Error Trap Script -->
+    <script>
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        document.getElementById('error-boundary').style.display = 'block';
+        document.getElementById('error-message').innerHTML = `Error: ${msg}<br>Line: ${lineNo}`;
+        return false;
+      };
+    </script>
 
     <script type="text/babel">
       const { useState, useEffect } = React;
 
-      // --- CONFIGURATION ---
-      // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
-      const API_URL = "PASTE_YOUR_WEB_APP_URL_HERE"; 
+      // ==========================================
+      // 👇 PASTE YOUR URL BELOW INSIDE THE QUOTES
+      const API_URL = "https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec"; 
+      // 👆 Example: const API_URL = "https://script.google.com/...";
+      // ==========================================
       
       const FREE_ITEM_THRESHOLD = 9;
       const EARLY_REDEMPTION_THRESHOLD = 8;
 
-      // API HELPER
       const apiCall = async (payload = null) => {
         try {
-          if(!API_URL.includes("https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec")) { 
-             alert("Configuration Error: Please paste your Google Web App URL in the index.html file."); 
-             return null; 
+          if(!API_URL || API_URL.includes("https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec")) { 
+             throw new Error("API_URL is not configured. Edit line 72."); 
           }
+          
           const options = payload ? {
             method: 'POST',
             body: JSON.stringify(payload)
@@ -71,12 +85,21 @@
           if(payload) options.headers = { "Content-Type": "text/plain" };
 
           const res = await fetch(API_URL, options);
+          
+          // Helper: Check if response is HTML (Login page) instead of JSON
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") === -1) {
+            throw new Error("Received HTML instead of JSON. Check if Script Access is set to 'Anyone'.");
+          }
+
           const json = await res.json();
           if(json.status === 'error') throw new Error(json.message);
           return json.data;
         } catch (e) {
           console.error("API Error:", e);
-          alert("Connection error: " + e.message);
+          // Show error on screen for easier debugging
+          document.getElementById('error-boundary').style.display = 'block';
+          document.getElementById('error-message').innerText = e.message;
           return null;
         }
       };
@@ -417,7 +440,6 @@
         const renderDetail = ()=>{
           const c = getActive();
           
-          // CRITICAL FIX: IF CUSTOMER NOT FOUND YET, SHOW LOADING INSTEAD OF BLACK SCREEN
           if(!c) return (
              <div className="min-h-screen bg-[var(--color-grey-dark)] flex flex-col items-center justify-center p-6 text-center">
                 <div className="loader mb-4"></div>
