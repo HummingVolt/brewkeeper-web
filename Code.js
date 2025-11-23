@@ -73,7 +73,7 @@
       function showSafeConnect(msg) {
         var content = document.getElementById('safe-content');
         if(!content) return;
-        var existingUrl = localStorage.getItem('https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec') || '';
+        var existingUrl = localStorage.getItem('https://script.google.com/macros/s/AKfycbyVjrZvU0UNm3zDYKQ-gHblyB7cVx3W8sG7N3dq1W7xPivtw8x7mYUbh9Hbt1-Pxyw9sA/exec') || '';
         
         content.innerHTML = `
           <div class="safe-card">
@@ -88,7 +88,7 @@
       function manualSave() {
         var url = document.getElementById('manual-url').value.trim();
         if(!url) return alert("Please enter the URL");
-        localStorage.setItem('https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec', url);
+        localStorage.setItem('https://script.google.com/macros/s/AKfycbyVjrZvU0UNm3zDYKQ-gHblyB7cVx3W8sG7N3dq1W7xPivtw8x7mYUbh9Hbt1-Pxyw9sA/exec', url);
         window.location.reload();
       }
 
@@ -109,7 +109,7 @@
       const { useState, useEffect } = React;
       const FREE_ITEM_THRESHOLD = 9;
       const EARLY_REDEMPTION_THRESHOLD = 8;
-      const LS_KEY = 'https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec';
+      const LS_KEY = 'https://script.google.com/macros/s/AKfycbyVjrZvU0UNm3zDYKQ-gHblyB7cVx3W8sG7N3dq1W7xPivtw8x7mYUbh9Hbt1-Pxyw9sA/exec';
 
       // --- MAIN APP COMPONENT ---
       function App() {
@@ -258,3 +258,4 @@
               else if(type === 'stamp') { if(c.stamps >= FREE_ITEM_THRESHOLD) return; if(c.skipNextStamp) { updates = { skipNextStamp: false }; entry = { ...entry, type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 }; } else { updates = { stamps: c.stamps + 1 }; entry = { ...entry, type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 }; } } 
               else if(type === 'redeem') { const isEarly = c.stamps < FREE_ITEM_THRESHOLD; updates = { stamps: 0, skipNextStamp: isEarly }; entry = { ...entry, type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly?'Early Free Redeemed':'Free Coffee Redeemed', amount:0 }; } 
               else if(type === 'adjust
+
