@@ -53,16 +53,18 @@
       const EARLY_REDEMPTION_THRESHOLD = 8;
       const LOCAL_STORAGE_KEY = 'coffeeShopCustomers';
 
-      const loadCustomers = async () => {
-  return new Promise((resolve, reject) => {
-    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCustomers();
-  });
-};
-      const saveCustomer = async (customer) => {
-  return new Promise((resolve, reject) => {
-    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveCustomer(customer);
-  });
-};
+      const loadCustomers = () => {
+        try {
+          const json = localStorage.getItem(LOCAL_STORAGE_KEY);
+          return json ? JSON.parse(json) : [];
+        } catch (e) {
+          console.error(e);
+          return [];
+        }
+      };
+      const saveCustomers = (customers) => {
+        try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(customers)); } catch(e){ console.error(e); }
+      };
 
       const Icon = ({ name, size=24, className='' })=>{
         const icons = {
@@ -250,12 +252,39 @@
           setPaymentAmount(''); setView('detail');
         };
 
-        const adjustStamps = (delta) => {
-          const c = getActive();
-          if(!c) return;
-          const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
-          updateActive({ stamps:newStamps });
-        };
+ const adjustStamps = (delta) => {
+  const c = getActive();
+  if (!c) return;
+  const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
+
+  let entry = null;
+  if (delta < 0) {
+    entry = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      type: 'purchase',
+      subType: 'stamp_removed',
+      description: 'Stamp Removed Manually',
+      amount: 0
+    };
+  } else if (delta > 0) {
+    entry = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      type: 'purchase',
+      subType: 'stamp_added_manual',
+      description: 'Stamp Added Manually',
+      amount: 0
+    };
+  }
+
+  updateActive({
+    stamps: newStamps,
+    history: entry ? [entry, ...c.history] : c.history
+  });
+};
+
+
 
         // Render helpers
         const renderList = ()=>{
@@ -266,7 +295,6 @@
                 <div className="flex justify-between items-center mb-4">
                   <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
-                    <p className="text-stone-400 text-sm">Loyalty card + credit tab (no cash recording)</p>
                   </div>
                   <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full shadow-lg hover:bg-[var(--color-coffee-dark)] transition"><Icon name="plus" size={20} /></button>
                 </div>
@@ -329,10 +357,15 @@
           </div>
         );
 
+        const isoToLocalDate = (iso) => {
+        const d = new Date(iso);
+            return d.toLocaleDateString('en-CA'); // Matches <input type="date"> format
+        };
+
         const renderHistory = ()=>{
           const c = getActive();
           if(!c) return null;
-          const filtered = (c.history || []).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).filter(it=> !historyFilterDate ? true : it.date.startsWith(historyFilterDate));
+          const filtered = (c.history || []).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).filter(it => !historyFilterDate ? true : isoToLocalDate(it.date) === historyFilterDate);
           return (
             <div className="max-w-md mx-auto min-h-screen pb-6">
               <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
