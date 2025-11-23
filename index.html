@@ -23,87 +23,29 @@
       input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
       input[type="number"]{ -moz-appearance:textfield; }
 
-      /* Activity colors */
-      .activity-payment  { color: #34D399; }
-      .activity-credit   { color: #60A5FA; }
-      .activity-redeem   { color: #C084FC; }
-      .activity-stamp    { color: #FBBF24; }
-      .activity-default  { color: #E5E7EB; }
-      .amount { color: #d1d5db; font-weight: 800; }
-      
-      /* Loader */
       .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--color-coffee-primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-      /* Error Box */
-      #error-boundary { display: none; position: fixed; top: 0; left: 0; right: 0; padding: 20px; background: #7f1d1d; color: white; z-index: 9999; font-family: monospace; }
+      /* Activity colors */
+      .activity-payment { color: #34D399; }
+      .activity-credit { color: #60A5FA; }
+      .activity-redeem { color: #C084FC; }
+      .activity-stamp { color: #FBBF24; }
+      .activity-default { color: #E5E7EB; }
+      .amount { color: #d1d5db; font-weight: 800; }
     </style>
   </head>
 
   <body>
-    <!-- This box will show if the app crashes -->
-    <div id="error-boundary">
-      <h3 class="font-bold text-lg mb-2">Something went wrong</h3>
-      <p id="error-message">Unknown error</p>
-      <p class="text-sm mt-2 opacity-75">Check the API_URL configuration or permissions.</p>
-    </div>
-
     <div id="root"></div>
-
-    <!-- Error Trap Script -->
-    <script>
-      window.onerror = function(msg, url, lineNo, columnNo, error) {
-        document.getElementById('error-boundary').style.display = 'block';
-        document.getElementById('error-message').innerHTML = `Error: ${msg}<br>Line: ${lineNo}`;
-        return false;
-      };
-    </script>
 
     <script type="text/babel">
       const { useState, useEffect } = React;
-
-      // ==========================================
-      // 👇 PASTE YOUR URL BELOW INSIDE THE QUOTES
-      const API_URL = "https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec"; 
-      // 👆 Example: const API_URL = "https://script.google.com/...";
-      // ==========================================
-      
       const FREE_ITEM_THRESHOLD = 9;
       const EARLY_REDEMPTION_THRESHOLD = 8;
+      const LS_KEY = 'BREWKEEPER_API_URL';
 
-      const apiCall = async (payload = null) => {
-        try {
-          if(!API_URL || API_URL.includes("https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec")) { 
-             throw new Error("API_URL is not configured. Edit line 72."); 
-          }
-          
-          const options = payload ? {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          } : { method: 'GET' };
-          
-          if(payload) options.headers = { "Content-Type": "text/plain" };
-
-          const res = await fetch(API_URL, options);
-          
-          // Helper: Check if response is HTML (Login page) instead of JSON
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") === -1) {
-            throw new Error("Received HTML instead of JSON. Check if Script Access is set to 'Anyone'.");
-          }
-
-          const json = await res.json();
-          if(json.status === 'error') throw new Error(json.message);
-          return json.data;
-        } catch (e) {
-          console.error("API Error:", e);
-          // Show error on screen for easier debugging
-          document.getElementById('error-boundary').style.display = 'block';
-          document.getElementById('error-message').innerText = e.message;
-          return null;
-        }
-      };
-
+      // --- SHARED COMPONENTS ---
       const Icon = ({ name, size=24, className='' })=>{
         const icons = {
           coffee: <path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-3-4Z M6 1v3 M10 1v3 M14 1v3"/>,
@@ -118,451 +60,435 @@
           checkCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
           alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></>,
           star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
-          refresh: <path d="M23 4v6h-6M1 20v-6h6" />
+          refresh: <path d="M23 4v6h-6M1 20v-6h6" />,
+          link: <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />,
+          logOut: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" />
         };
-        return (
-          <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            {icons[name] || <circle cx="12" cy="12" r="10" />}
-          </svg>
-        );
+        return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || <circle cx="12" cy="12" r="10" />}</svg>;
       };
 
-      const formatDateTime = (iso) => {
-        try {
-          if(!iso) return '';
-          const d = new Date(iso);
-          return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
-        } catch(e) { return ''; }
-      };
-
-      const Button = ({ children, onClick, variant='primary', className='', disabled=false, type='button' })=>{
+      const Button = ({ children, onClick, variant='primary', className='', disabled=false })=>{
         const base = "px-4 py-3 rounded-xl font-semibold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm";
         const styles = {
           primary: `bg-[var(--color-coffee-primary)] text-white hover:bg-[var(--color-coffee-dark)]`,
           secondary: `bg-[var(--color-grey-medium)] text-white border border-[var(--color-grey-border)] hover:bg-stone-600`
         };
-        return <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles[variant] || styles.secondary} ${className}`}>{children}</button>;
+        return <button onClick={onClick} disabled={disabled} className={`${base} ${styles[variant] || styles.secondary} ${className}`}>{children}</button>;
       };
 
       const Card = ({ children, className='' }) => <div className={`bg-[var(--color-grey-medium)] rounded-2xl shadow-lg border border-[var(--color-grey-border)] ${className}`}>{children}</div>;
 
-      const HistoryRow = ({ item }) => {
-        let activityClass = 'activity-default';
-        if (item.type === 'payment') activityClass = 'activity-payment';
-        else if (item.type === 'redeem') activityClass = 'activity-redeem';
-        else if (item.type === 'purchase') {
-          if (item.subType === 'credit') activityClass = 'activity-credit';
-          else if (item.subType === 'stamp_only' || item.subType === 'stamp_skipped') activityClass = 'activity-stamp';
-        }
+      const formatDateTime = (iso) => {
+        try { if(!iso) return ''; const d = new Date(iso); return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`; } catch(e) { return ''; }
+      };
 
-        let amountLabel = '';
-        if (item.type === 'payment') amountLabel = `NPR ${Math.abs(item.amount)}`;
-        else if (item.type === 'redeem') amountLabel = 'Free Item';
-        else if (item.type === 'purchase') {
-          if (item.subType === 'credit') amountLabel = `+ NPR ${item.amount}`;
-          else if (item.subType === 'stamp_only') amountLabel = 'Stamp';
-          else if (item.subType === 'stamp_skipped') amountLabel = 'Stamp Skipped';
-          else amountLabel = item.amount ? `NPR ${item.amount}` : '';
+      // --- API LAYER ---
+      const apiCall = async (payload = null) => {
+        const url = localStorage.getItem(LS_KEY);
+        if(!url) throw new Error("Database URL not connected.");
+
+        const options = payload ? { method: 'POST', body: JSON.stringify(payload), headers: { "Content-Type": "text/plain" } } : { method: 'GET' };
+        
+        try {
+          const res = await fetch(url, options);
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") === -1) {
+            throw new Error("Invalid URL. Make sure access is 'Anyone'.");
+          }
+          const json = await res.json();
+          if(json.status === 'error') throw new Error(json.message);
+          return json.data;
+        } catch (e) {
+          console.error(e);
+          throw e; // Bubble up for UI to handle
         }
+      };
+
+      // --- SETUP SCREEN ---
+      const SetupScreen = ({ onConnect }) => {
+        const [url, setUrl] = useState('');
+        const [isTesting, setIsTesting] = useState(false);
+        const [error, setError] = useState('');
+
+        const handleConnect = async (e) => {
+          e.preventDefault();
+          setError('');
+          setIsTesting(true);
+
+          if(!url.includes('script.google.com') || !url.includes('/exec')) {
+            setError('That does not look like a valid Google Script URL. It should end in /exec');
+            setIsTesting(false);
+            return;
+          }
+
+          try {
+            // Test connection
+            const testOptions = { method: 'GET' };
+            const res = await fetch(url, testOptions);
+            const json = await res.json(); // If this parses, we are good
+            localStorage.setItem(LS_KEY, url);
+            onConnect();
+          } catch(err) {
+            setError('Connection failed. Check if "Who has access" is set to "Anyone" in your Google Script deployment.');
+          } finally {
+            setIsTesting(false);
+          }
+        };
 
         return (
-          <div className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
-            <div>
-              <p className={`font-medium ${activityClass}`}>{item.description}</p>
-              <p className="text-xs text-gray-400">{formatDateTime(item.date)}</p>
+          <div className="min-h-screen flex items-center justify-center p-6">
+            <div className="w-full max-w-md space-y-6">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-[var(--color-coffee-primary)] rounded-3xl mx-auto flex items-center justify-center mb-4 shadow-xl">
+                  <Icon name="coffee" size={40} className="text-white" />
+                </div>
+                <h1 className="text-3xl font-bold text-white">BrewKeeper</h1>
+                <p className="text-gray-400 mt-2">Connect your database to start.</p>
+              </div>
+
+              <Card className="p-6">
+                <form onSubmit={handleConnect} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Google Script URL</label>
+                    <input 
+                      value={url} 
+                      onChange={e=>setUrl(e.target.value)} 
+                      placeholder="https://script.google.com/.../exec" 
+                      className="w-full p-4 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)] border border-stone-700 placeholder-stone-600" 
+                    />
+                  </div>
+                  
+                  {error && <div className="p-3 bg-red-900/50 text-red-200 text-sm rounded-lg flex gap-2"><Icon name="alertCircle" size={16} className="shrink-0 mt-0.5" /> <span>{error}</span></div>}
+
+                  <Button type="submit" variant="primary" className="w-full" disabled={!url || isTesting}>
+                    {isTesting ? 'Connecting...' : 'Connect Database'}
+                  </Button>
+                </form>
+              </Card>
+              <p className="text-center text-xs text-stone-600">The URL is saved to this device.</p>
             </div>
-            <div className="text-sm amount">{amountLabel}</div>
           </div>
         );
       };
 
-      function App(){
+      // --- MAIN APP ---
+      function App() {
+        const [connected, setConnected] = useState(!!localStorage.getItem(LS_KEY));
         const [customers, setCustomers] = useState([]);
         const [loading, setLoading] = useState(false);
         const [view, setView] = useState('list');
-        const [activeCustomerId, setActiveCustomerId] = useState(null);
+        const [activeId, setActiveId] = useState(null);
         const [searchQuery, setSearchQuery] = useState('');
-        const [newCustomerName, setNewCustomerName] = useState('');
-        const [paymentAmount, setPaymentAmount] = useState('');
-        const [creditAmount, setCreditAmount] = useState('');
-        const [historyFilterDate, setHistoryFilterDate] = useState('');
-        const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+        
+        // Form states
+        const [newName, setNewName] = useState('');
+        const [amount, setAmount] = useState('');
+        const [histDate, setHistDate] = useState('');
+        const [delId, setDelId] = useState(null);
 
-        // Fetch on Load
         useEffect(()=>{
-          fetchCustomers();
-        },[]);
+          if(connected) loadData();
+        }, [connected]);
 
-        const fetchCustomers = async () => {
+        const loadData = async () => {
           setLoading(true);
-          const data = await apiCall(); // GET
-          if(data) setCustomers(data);
-          setLoading(false);
+          try {
+            const data = await apiCall();
+            setCustomers(data || []);
+          } catch(e) {
+            alert("Failed to load: " + e.message);
+          } finally {
+            setLoading(false);
+          }
         };
 
-        const getActive = () => customers.find(c=> String(c.id) === String(activeCustomerId));
+        const disconnect = () => {
+          if(confirm("Disconnect database? You will need to paste the URL again.")) {
+            localStorage.removeItem(LS_KEY);
+            setConnected(false);
+            setCustomers([]);
+          }
+        };
 
-        // --- ACTIONS ---
-        const addCustomer = async (e)=>{
+        const getActive = () => customers.find(c => String(c.id) === String(activeId));
+
+        // -- LOGIC --
+        const doAction = async (action, payload={}) => {
+          setLoading(true);
+          try {
+             const newData = await apiCall({ action, ...payload });
+             if(newData) {
+                setCustomers(newData);
+                return true;
+             }
+          } catch(e) {
+             alert("Error: " + e.message);
+          } finally {
+             setLoading(false);
+          }
+          return false;
+        };
+
+        const handleAdd = async (e) => {
           e.preventDefault();
-          if(!newCustomerName.trim()) return;
-          setLoading(true);
-          const nc = { id: `id-${Date.now()}`, name:newCustomerName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
-          
-          const updatedList = await apiCall({ action: 'add', data: nc });
-          if(updatedList) {
-             setCustomers(updatedList);
-             setNewCustomerName('');
-             setActiveCustomerId(nc.id);
+          if(!newName.trim()) return;
+          const nc = { id: `id-${Date.now()}`, name:newName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
+          if(await doAction('add', { data: nc })) {
+            setNewName('');
+            setActiveId(nc.id);
+            setView('detail');
+          }
+        };
+
+        const handleUpdate = async (updates) => {
+           const c = getActive();
+           if(!c) return;
+           await doAction('update', { data: { ...c, ...updates } });
+        };
+
+        const handleTx = async (type) => { // type: 'credit', 'payment', 'stamp', 'redeem'
+           const c = getActive();
+           if(!c) return;
+           const val = Number(amount);
+           
+           let updates = {};
+           let entry = { id: Date.now(), date: new Date().toISOString() };
+
+           if(type === 'credit') {
+             if(val <= 0) return;
+             updates = { credit: c.credit + val };
+             entry = { ...entry, type: 'purchase', subType: 'credit', description: 'Credit Added', amount: val };
+           } 
+           else if(type === 'payment') {
+             if(val <= 0) return;
+             updates = { credit: c.credit - val };
+             entry = { ...entry, type: 'payment', description: 'Cash Received', amount: -val };
+           }
+           else if(type === 'stamp') {
+             if(c.stamps >= FREE_ITEM_THRESHOLD) return;
+             if(c.skipNextStamp) {
+               updates = { skipNextStamp: false };
+               entry = { ...entry, type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 };
+             } else {
+               updates = { stamps: c.stamps + 1 };
+               entry = { ...entry, type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 };
+             }
+           }
+           else if(type === 'redeem') {
+             const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
+             updates = { stamps: 0, skipNextStamp: isEarly };
+             entry = { ...entry, type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly?'Early Free Redeemed':'Free Coffee Redeemed', amount:0 };
+           }
+           else if(type === 'adjust_plus') updates = { stamps: Math.min(FREE_ITEM_THRESHOLD, c.stamps+1) }; // No history for manual adjust
+           else if(type === 'adjust_minus') updates = { stamps: Math.max(0, c.stamps-1) };
+
+           if(type === 'credit' || type === 'payment') {
+             setAmount('');
              setView('detail');
-          }
-          setLoading(false);
+           }
+
+           // Optimistic update for UI snapiness could go here, but for safety we wait
+           if(Object.keys(updates).length > 0) {
+             const finalUpdates = { ...updates, history: entry.type ? [entry, ...c.history] : c.history };
+             await handleUpdate(finalUpdates);
+           }
         };
 
-        const deleteCustomer = async (id) => {
-          setLoading(true);
-          const updatedList = await apiCall({ action: 'delete', id: id });
-          if(updatedList) setCustomers(updatedList);
-          setConfirmDeleteId(null);
-          setActiveCustomerId(null);
-          setView('list');
-          setLoading(false);
-        };
+        if(!connected) return <SetupScreen onConnect={()=>setConnected(true)} />;
 
-        const updateCustomer = async (id, updates) => {
-          setLoading(true);
-          const current = customers.find(c => String(c.id) === String(id));
-          const updated = { ...current, ...updates };
-          
-          const updatedList = await apiCall({ action: 'update', data: updated });
-          if(updatedList) setCustomers(updatedList);
-          setLoading(false);
-        };
-
-        const updateActive = (updates) => updateCustomer(activeCustomerId, updates);
-
-        const stampOnly = () => {
-          const c = getActive();
-          if(!c) return;
-          if(c.skipNextStamp){
-            const entry = { id: Date.now(), date: new Date().toISOString(), type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 };
-            updateActive({ skipNextStamp:false, history:[entry, ...c.history] });
-            return;
-          }
-          const newStamps = Math.min(FREE_ITEM_THRESHOLD, c.stamps + 1);
-          const entry = { id: Date.now(), date:new Date().toISOString(), type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 };
-          updateActive({ stamps:newStamps, history:[entry, ...c.history] });
-        };
-
-        const submitCredit = () => {
-          const c = getActive();
-          const amount = Number(creditAmount);
-          if(!c || isNaN(amount) || amount<=0) return;
-          const newCredit = c.credit + amount;
-          const entry = { id: Date.now(), date:new Date().toISOString(), type:'purchase', subType:'credit', description:'Credit Added to Tab', amount:amount };
-          updateActive({ credit:newCredit, history:[entry, ...c.history] });
-          setCreditAmount(''); setView('detail');
-        };
-
-        const redeem = () => {
-          const c = getActive();
-          if(!c) return;
-          const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
-          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Redeemed', amount:0 };
-          updateActive({ stamps:0, skipNextStamp:isEarly, history:[entry, ...c.history] });
-        };
-
-        const submitPayment = () => {
-          const c = getActive();
-          const amount = Number(paymentAmount);
-          if(!c || isNaN(amount) || amount<=0) return;
-          const newCredit = c.credit - amount;
-          const entry = { id: Date.now(), date: new Date().toISOString(), type: 'payment', description: 'Cash Received', amount: -amount };
-          updateActive({ credit:newCredit, history:[entry, ...c.history] });
-          setPaymentAmount(''); setView('detail');
-        };
-
-        const adjustStamps = (delta) => {
-          const c = getActive();
-          if (!c) return;
-          const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
-          let entry = null;
-          if (delta < 0) entry = { id: Date.now(), date: new Date().toISOString(), type: 'purchase', subType: 'stamp_removed', description: 'Stamp Removed Manually', amount: 0 };
-          else if (delta > 0) entry = { id: Date.now(), date: new Date().toISOString(), type: 'purchase', subType: 'stamp_added_manual', description: 'Stamp Added Manually', amount: 0 };
-          updateActive({ stamps: newStamps, history: entry ? [entry, ...c.history] : c.history });
-        };
-
-        // Render helpers
-        const renderList = ()=>{
+        // --- RENDERERS ---
+        const renderList = () => {
           const filtered = customers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
           return (
             <div className="max-w-md mx-auto min-h-screen pb-20">
               <div className="bg-[var(--color-grey-dark)] p-6 sticky top-0 z-10 border-b border-[var(--color-grey-border)]">
                 <div className="flex justify-between items-center mb-4">
-                  <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
-                  </div>
+                  <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
                   <div className="flex gap-2">
                     {loading && <div className="loader"></div>}
-                    <button onClick={fetchCustomers} className="bg-stone-700 text-white p-2 rounded-full shadow-lg hover:bg-stone-600 transition"><Icon name="refresh" size={20}/></button>
-                    <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full shadow-lg hover:bg-[var(--color-coffee-dark)] transition"><Icon name="plus" size={20} /></button>
+                    <button onClick={disconnect} className="p-2 text-stone-600 hover:text-red-400"><Icon name="logOut" size={20}/></button>
+                    <button onClick={loadData} className="bg-stone-700 text-white p-2 rounded-full hover:bg-stone-600"><Icon name="refresh" size={20}/></button>
+                    <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full hover:bg-[var(--color-coffee-dark)]"><Icon name="plus" size={20} /></button>
                   </div>
                 </div>
                 <div className="relative">
                   <div className="absolute left-3 top-3 text-gray-400"><Icon name="search" size={18} /></div>
-                  <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 bg-stone-800 text-white rounded-xl border-none focus:ring-2 focus:ring-[var(--color-coffee-primary)] outline-none placeholder-stone-400" />
+                  <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search..." className="w-full pl-10 pr-4 py-2 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
                 </div>
               </div>
 
-              {loading && customers.length === 0 ? <div className="p-10 text-center text-white">Loading database...</div> : (
-                <>
-                {customers.length===0 ? (
-                  <div className="p-4 text-center text-gray-400"><p>Welcome — add your first customer.</p></div>
-                ) : (
-                  <div className="p-4 space-y-3">
-                    {filtered.length===0 ? (
-                      <div className="text-center py-10 text-gray-500"><Icon name="coffee" size={48} className="mx-auto opacity-20" /><p>No customers matching "{searchQuery}"</p></div>
-                    ) : filtered.map(c=>{
-                      const credit = Number.isFinite(Number(c.credit)) ? Number(c.credit) : 0;
-                      return (
-                        <div key={c.id} onClick={()=>{ setActiveCustomerId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl shadow-lg border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center">
-                          <div>
-                            <h3 className="font-bold text-white">{c.name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              {credit > 0 ? (
-                                <span className="px-2 py-1 rounded-md text-xs bg-red-900/50 text-red-400 font-bold uppercase">NPR {credit} Due</span>
-                              ) : credit < 0 ? (
-                                <span className="px-2 py-1 rounded-md text-xs bg-emerald-900/50 text-emerald-400 font-bold uppercase">NPR {Math.abs(credit)} Advance</span>
-                              ) : (
-                                <span className="px-2 py-1 rounded-md text-xs bg-stone-700 text-gray-300 font-bold uppercase">Settled</span>
-                              )}
-                              <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps} / {FREE_ITEM_THRESHOLD}</span>
-                            </div>
-                          </div>
-                          <Icon name="chevronLeft" className="rotate-180 text-gray-500" />
+              {loading && customers.length===0 ? <div className="p-10 text-center text-stone-500">Loading...</div> : (
+                <div className="p-4 space-y-3">
+                  {filtered.length===0 ? <div className="text-center py-10 text-stone-600">No customers found.</div> : filtered.map(c=>(
+                    <div key={c.id} onClick={()=>{ setActiveId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center hover:bg-stone-700 transition">
+                      <div>
+                        <h3 className="font-bold text-white">{c.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${c.credit>0?'bg-red-900/50 text-red-400':c.credit<0?'bg-emerald-900/50 text-emerald-400':'bg-stone-700 text-stone-300'}`}>
+                            {c.credit>0?`Due ${c.credit}`:c.credit<0?`Adv ${Math.abs(c.credit)}`:'Settled'}
+                          </span>
+                          <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps}/{FREE_ITEM_THRESHOLD}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-                </>
+                      </div>
+                      <Icon name="chevronLeft" className="rotate-180 text-stone-500" />
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           );
         };
 
-        const renderNew = ()=>(
-          <div className="max-w-md mx-auto min-h-screen pb-6">
-            <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 border-b border-[var(--color-grey-border)] flex items-center gap-4">
-              <button onClick={()=>setView('list')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
-              <h2 className="font-bold text-lg text-white">Add New Customer</h2>
-            </div>
-            <form onSubmit={addCustomer} className="p-4 space-y-4">
-              <Card className="p-5 space-y-3">
-                <label className="block text-sm font-medium text-gray-300">Customer Name</label>
-                <input value={newCustomerName} onChange={e=>setNewCustomerName(e.target.value)} required placeholder="e.g. Ram Bahadur" className="w-full p-3 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
-              </Card>
-              <Button type="submit" variant="primary" className="w-full" disabled={loading}>{loading ? 'Saving...' : 'Create Customer'}</Button>
-            </form>
-          </div>
-        );
-
-        const isoToLocalDate = (iso) => {
-        const d = new Date(iso);
-            return d.toLocaleDateString('en-CA');
-        };
-
-        const renderHistory = ()=>{
+        const renderDetail = () => {
           const c = getActive();
-          if(!c) return <div className="p-10 text-white text-center">Loading history...</div>;
-          const filtered = (c.history || []).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).filter(it => !historyFilterDate ? true : isoToLocalDate(it.date) === historyFilterDate);
-          return (
-            <div className="max-w-md mx-auto min-h-screen pb-6">
-              <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
-                <button onClick={()=>setView('detail')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
-                <h2 className="font-bold text-lg text-white flex-1 truncate">Activity for {c.name}</h2>
-              </div>
-              <div className="p-4">
-                <div className="mb-4">
-                  <label className="block text-xs text-gray-400 mb-2 uppercase">Filter by date</label>
-                  <input type="date" value={historyFilterDate} onChange={e=>setHistoryFilterDate(e.target.value)} className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none border border-[var(--color-grey-border)]" />
-                  {historyFilterDate && <button onClick={()=>setHistoryFilterDate('')} className="mt-2 text-sm text-red-400">Clear</button>}
-                </div>
-                <div className="space-y-2">
-                  {filtered.length===0 ? <p className="text-center text-gray-500 py-10">No activity</p> : filtered.map(it=> <HistoryRow key={it.id} item={it} />)}
-                </div>
-              </div>
-            </div>
-          );
-        };
-
-        const renderPaymentModal = ()=>{
-          const c = getActive();
-          if(!c) return null;
-          return (
-            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-              <Card className="w-full max-w-sm p-6">
-                <h3 className="text-xl font-bold text-white">Cash Received</h3>
-                <p className="text-sm text-gray-400">Customer: <span className="font-semibold text-white">{c.name}</span></p>
-                <div>
-                  <label className="text-sm text-gray-300 block mt-3">Amount (NPR)</label>
-                  <input value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} type="number" min="1" step="any" className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none" placeholder="e.g. 500" />
-                </div>
-                <div className="flex justify-end gap-3 mt-4">
-                  <Button variant="secondary" onClick={()=>{ setPaymentAmount(''); setView('detail'); }}>Cancel</Button>
-                  <Button variant="primary" onClick={submitPayment} disabled={!paymentAmount || Number(paymentAmount)<=0 || loading}>{loading?'Saving...':'Cash Received'}</Button>
-                </div>
-              </Card>
-            </div>
-          );
-        };
-
-        const renderCreditModal = ()=>{
-          const c = getActive();
-          if(!c) return null;
-          return (
-            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-              <Card className="w-full max-w-sm p-6">
-                <h3 className="text-xl font-bold text-white">Add Credit to Tab</h3>
-                <div>
-                  <label className="text-sm text-gray-300 block mt-3">Amount (NPR)</label>
-                  <input value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} type="number" min="1" step="any" className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none" placeholder="e.g. 150" />
-                </div>
-                <div className="flex justify-end gap-3 mt-4">
-                  <Button variant="secondary" onClick={()=>{ setCreditAmount(''); setView('detail'); }}>Cancel</Button>
-                  <Button variant="primary" onClick={submitCredit} disabled={!creditAmount || Number(creditAmount)<=0 || loading}>{loading?'Saving...':'Add Credit'}</Button>
-                </div>
-              </Card>
-            </div>
-          );
-        };
-
-        const renderDetail = ()=>{
-          const c = getActive();
+          if(!c) return <div className="p-10 text-center text-white">Loading customer... <br/><button onClick={loadData} className="text-[var(--color-coffee-primary)] mt-4">Reload</button></div>;
           
-          if(!c) return (
-             <div className="min-h-screen bg-[var(--color-grey-dark)] flex flex-col items-center justify-center p-6 text-center">
-                <div className="loader mb-4"></div>
-                <h2 className="text-white text-xl font-bold">Syncing Data...</h2>
-                <p className="text-gray-400 mt-2">If this takes too long, the data might be out of sync.</p>
-                <button onClick={()=>{ fetchCustomers(); setView('list'); }} className="mt-6 px-4 py-2 bg-stone-700 text-white rounded-lg">Return to List</button>
-             </div>
-          );
-
           const eligible = c.stamps >= FREE_ITEM_THRESHOLD;
-          const earlyAvailable = c.stamps >= EARLY_REDEMPTION_THRESHOLD && !eligible;
+          const early = c.stamps >= EARLY_REDEMPTION_THRESHOLD && !eligible;
+
           return (
-            <div className="max-w-md mx-auto min-h-screen pb-6">
+             <div className="max-w-md mx-auto min-h-screen pb-6">
               <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
                 <button onClick={()=>setView('list')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
                 <h2 className="font-bold text-lg flex-1 truncate text-white">{c.name}</h2>
-                <button onClick={()=>setConfirmDeleteId(c.id)} className="text-red-400 hover:text-red-300"><Icon name="trash2" /></button>
+                <button onClick={()=>setDelId(c.id)} className="text-red-400 hover:text-red-300"><Icon name="trash2" /></button>
               </div>
 
               <div className="p-4 space-y-6">
                 <Card className="p-5">
-                  <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider mb-2">Account Balance</h3>
+                  <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider mb-2">Balance</h3>
                   <div className="flex justify-between items-center">
                     <p className={`text-4xl font-extrabold ${c.credit>0?'text-red-400':'text-emerald-400'}`}>NPR {Math.abs(c.credit)}</p>
-                    <div className="px-2 py-1 rounded-md text-xs font-bold uppercase leading-none bg-stone-700 text-gray-300">{c.credit>0?'AMOUNT DUE':c.credit<0?'ADVANCE':'CLEARED'}</div>
+                    <div className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-stone-700 text-gray-300">{c.credit>0?'DUE':c.credit<0?'ADVANCE':'CLEARED'}</div>
                   </div>
                 </Card>
 
-                <Card className="p-5 space-y-4 relative">
-                  <div className="flex justify-between items-end">
+                <Card className="p-5 space-y-4 relative overflow-hidden">
+                  <div className="flex justify-between items-end relative z-10">
                     <div>
-                      <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Loyalty Card</h3>
+                      <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Loyalty</h3>
                       <div className="flex items-center gap-3">
                         <p className="text-2xl font-bold text-[var(--color-coffee-primary)]">{c.stamps} <span className="text-sm font-normal text-stone-400">/ {FREE_ITEM_THRESHOLD}</span></p>
                         <div className="flex gap-1">
-                          <button onClick={()=>adjustStamps(-1)} disabled={c.stamps<=0 || loading} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="minus" size={12} /></button>
-                          <button onClick={()=>adjustStamps(1)} disabled={c.stamps>=FREE_ITEM_THRESHOLD || loading} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="plus" size={12} /></button>
+                          <button onClick={()=>handleTx('adjust_minus')} disabled={loading} className="p-1 bg-stone-700 rounded text-white"><Icon name="minus" size={12} /></button>
+                          <button onClick={()=>handleTx('adjust_plus')} disabled={loading} className="p-1 bg-stone-700 rounded text-white"><Icon name="plus" size={12} /></button>
                         </div>
                       </div>
                     </div>
-                    <div className="absolute -right-4 -top-4 opacity-10 text-[var(--color-coffee-primary)]"><Icon name="coffee" size={96} /></div>
                   </div>
+                  <div className="absolute -right-4 -top-4 opacity-10 text-[var(--color-coffee-primary)]"><Icon name="coffee" size={96} /></div>
 
-                  {c.skipNextStamp && <div className="flex items-center gap-2 p-3 bg-red-900/30 rounded-lg text-red-300 text-xs font-semibold"><Icon name="alertCircle" size={16} /> <p>STAMP SKIPPED: Next purchase will not earn a stamp.</p></div>}
+                  {c.skipNextStamp && <div className="flex items-center gap-2 p-3 bg-red-900/30 rounded-lg text-red-300 text-xs font-semibold"><Icon name="alertCircle" size={16} /> <p>Stamp Skipped (Next Purchase)</p></div>}
 
-                  <div className="grid grid-cols-5 gap-3 mb-6">
+                  <div className="grid grid-cols-5 gap-3 mb-2 relative z-10">
                     {[...Array(FREE_ITEM_THRESHOLD + 1)].map((_,i)=>{
                       const isFree = i===FREE_ITEM_THRESHOLD;
                       const filled = i < c.stamps;
-                      return (
-                        <div key={i} className={`aspect-square rounded-lg flex items-center justify-center ${isFree ? (eligible ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 animate-pulse border-dashed border-2' : 'border-[var(--color-grey-border)] text-stone-600 border-dashed border-2') : (filled ? 'stamp-filled' : 'stamp-empty')}`}>
-                          {isFree ? <Icon name="gift" /> : <Icon name="coffee" size={16} />}
-                        </div>
-                      );
+                      return <div key={i} className={`aspect-square rounded-lg flex items-center justify-center ${isFree ? (eligible ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 animate-pulse border-2 border-dashed' : 'border-dashed border-2 border-stone-600') : (filled ? 'stamp-filled' : 'stamp-empty')}`}>{isFree ? <Icon name="gift" /> : <Icon name="coffee" size={16} />}</div>;
                     })}
                   </div>
 
-                  {eligible && <Button onClick={redeem} variant="primary" className="w-full" disabled={loading}>{loading?'Processing...':<><Icon name="gift" /> Redeem Free Coffee</>}</Button>}
-                  {earlyAvailable && <div className="space-y-2"><div className="flex items-start gap-2 p-3 bg-amber-900/30 rounded-lg text-amber-300 text-xs"><Icon name="alertCircle" size={16} /><p>Early redemption available ({c.stamps}/{FREE_ITEM_THRESHOLD}). It will skip the next stamp.</p></div><Button onClick={redeem} variant="secondary" className="w-full text-amber-400 border-amber-900/50 hover:bg-amber-900/30" disabled={loading}>Redeem Early (Skip Next)</Button></div>}
+                  {eligible && <Button onClick={()=>handleTx('redeem')} className="w-full" disabled={loading}>{loading?'...':'Redeem Free Coffee'}</Button>}
+                  {early && <Button onClick={()=>handleTx('redeem')} variant="secondary" className="w-full text-amber-400 border-amber-900" disabled={loading}>Redeem Early (Skip Next)</Button>}
                 </Card>
 
-                <Card className="p-5 space-y-4">
-                  <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Quick Actions</h3>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button onClick={stampOnly} variant="primary" disabled={c.stamps >= FREE_ITEM_THRESHOLD || loading}><Icon name="coffee" /> Stamp Only</Button>
-                    <Button onClick={openCreditModal} variant="secondary"><Icon name="creditCard" /> Add Credit</Button>
-                    <Button onClick={()=>setView('payment_modal')} variant="secondary" className="col-span-2"><Icon name="wallet" /> Cash Received</Button>
-                  </div>
-                </Card>
-
-                <Card className="p-5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Recent Activity</h3>
-                    <button onClick={()=>setView('history')} className="text-sm text-gray-300">View All</button>
-                  </div>
-                  <div className="space-y-2">
-                    {(c.history || []).slice(0,3).map(it=> <HistoryRow key={it.id} item={it} />)}
-                    {(c.history||[]).length===0 && <p className="text-center text-gray-500 text-sm pt-4">No recent activity recorded.</p>}
-                  </div>
-                </Card>
-              </div>
-            </div>
-          );
-        };
-
-        const renderDeleteModal = ()=>{
-          if(!confirmDeleteId) return null;
-          const c = customers.find(x=> String(x.id) === String(confirmDeleteId));
-          if(!c) return null;
-          return (
-            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-              <Card className="w-full max-w-sm p-6">
-                <h3 className="text-xl font-bold text-red-400">Confirm Deletion</h3>
-                <p className="text-sm text-gray-300 mt-2">Delete profile for <span className="font-semibold text-white">{c.name}</span>? This removes all history.</p>
-                <div className="flex justify-end gap-3 mt-4">
-                  <Button variant="secondary" onClick={()=>setConfirmDeleteId(null)}>Cancel</Button>
-                  <Button variant="primary" onClick={()=>deleteCustomer(c.id)} disabled={loading}>{loading?'Deleting...':'Delete'}</Button>
+                <div className="grid grid-cols-2 gap-3">
+                    <Button onClick={()=>handleTx('stamp')} disabled={loading || c.stamps>=FREE_ITEM_THRESHOLD}><Icon name="coffee" /> Stamp Only</Button>
+                    <Button onClick={()=>{ setAmount(''); setView('credit_modal'); }} variant="secondary"><Icon name="creditCard" /> Add Credit</Button>
+                    <Button onClick={()=>{ setAmount(''); setView('payment_modal'); }} variant="secondary" className="col-span-2"><Icon name="wallet" /> Cash Received</Button>
                 </div>
-              </Card>
-            </div>
+
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Activity</h3>
+                        <button onClick={()=>setView('history')} className="text-sm text-stone-400">View All</button>
+                    </div>
+                    {(c.history||[]).slice(0,3).map(h=>(
+                        <div key={h.id} className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
+                             <div><p className={`font-medium ${h.type==='payment'?'activity-payment':h.type==='redeem'?'activity-redeem':h.subType==='credit'?'activity-credit':'activity-stamp'}`}>{h.description}</p><p className="text-xs text-stone-500">{formatDateTime(h.date)}</p></div>
+                             <div className="text-sm amount">{h.amount ? `NPR ${Math.abs(h.amount)}` : ''}</div>
+                        </div>
+                    ))}
+                </div>
+              </div>
+             </div>
           );
         };
 
-        let content = null;
-        if(view==='list') content = renderList();
-        else if(view==='new') content = renderNew();
-        else if(view==='detail') content = renderDetail();
-        else if(view==='history') content = renderHistory();
-        else if(view==='payment_modal') content = (<>{renderDetail()}{renderPaymentModal()}</>);
-        else if(view==='credit_modal') content = (<>{renderDetail()}{renderCreditModal()}</>);
+        const renderHistory = () => {
+          const c = getActive();
+          if(!c) return null;
+          const list = (c.history||[]).filter(h=> !histDate || h.date.startsWith(histDate));
+          return (
+             <div className="max-w-md mx-auto min-h-screen pb-6">
+               <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
+                <button onClick={()=>setView('detail')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
+                <h2 className="font-bold text-lg text-white">History: {c.name}</h2>
+              </div>
+              <div className="p-4 space-y-4">
+                 <input type="date" value={histDate} onChange={e=>setHistDate(e.target.value)} className="w-full p-3 bg-stone-800 text-white rounded-xl outline-none" />
+                 {list.map(h=>(
+                    <div key={h.id} className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
+                         <div><p className={`font-medium ${h.type==='payment'?'activity-payment':h.type==='redeem'?'activity-redeem':h.subType==='credit'?'activity-credit':'activity-stamp'}`}>{h.description}</p><p className="text-xs text-stone-500">{formatDateTime(h.date)}</p></div>
+                         <div className="text-sm amount">{h.amount ? `NPR ${Math.abs(h.amount)}` : ''}</div>
+                    </div>
+                 ))}
+                 {list.length===0 && <p className="text-center text-stone-500">No records.</p>}
+              </div>
+             </div>
+          );
+        };
+
+        // --- MODALS ---
+        const renderTxModal = (type) => (
+           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <Card className="w-full max-w-sm p-6 space-y-4">
+                 <h3 className="text-xl font-bold text-white">{type==='credit'?'Add Credit to Tab':'Cash Received'}</h3>
+                 <input autoFocus type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Amount (NPR)" className="w-full p-4 bg-stone-800 text-white rounded-xl text-lg outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
+                 <div className="flex gap-3 pt-2">
+                    <Button onClick={()=>setView('detail')} variant="secondary" className="flex-1">Cancel</Button>
+                    <Button onClick={()=>handleTx(type)} disabled={loading || !amount} className="flex-1">Confirm</Button>
+                 </div>
+              </Card>
+           </div>
+        );
+
+        const renderNewModal = () => (
+           <div className="max-w-md mx-auto min-h-screen">
+               <div className="bg-[var(--color-grey-dark)] p-4 flex gap-4 items-center"><button onClick={()=>setView('list')}><Icon name="chevronLeft" className="text-white"/></button><h2 className="text-white font-bold text-lg">New Customer</h2></div>
+               <form onSubmit={handleAdd} className="p-4 space-y-4">
+                  <Card className="p-4"><label className="text-sm text-stone-400">Name</label><input autoFocus value={newName} onChange={e=>setNewName(e.target.value)} className="w-full mt-2 p-3 bg-stone-800 text-white rounded-xl outline-none" placeholder="Enter name" /></Card>
+                  <Button type="submit" disabled={loading} className="w-full">Create</Button>
+               </form>
+           </div>
+        );
 
         return (
           <>
-            {content}
-            {confirmDeleteId && renderDeleteModal()}
-            {view==='credit_modal' && renderCreditModal()}
-            {view==='payment_modal' && renderPaymentModal()}
+            {view==='list' && renderList()}
+            {view==='detail' && renderDetail()}
+            {view==='history' && renderHistory()}
+            {view==='new' && renderNewModal()}
+            {view==='credit_modal' && renderTxModal('credit')}
+            {view==='payment_modal' && renderTxModal('payment')}
+            
+            {delId && (
+               <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                 <Card className="w-full max-w-sm p-6 text-center space-y-4">
+                   <h3 className="text-xl font-bold text-red-400">Delete Customer?</h3>
+                   <div className="flex gap-3">
+                     <Button onClick={()=>setDelId(null)} variant="secondary" className="flex-1">Cancel</Button>
+                     <Button onClick={async ()=>{ if(await doAction('delete', {id:delId})) { setDelId(null); setView('list'); } }} variant="primary" className="flex-1 bg-red-600 hover:bg-red-700">Delete</Button>
+                   </div>
+                 </Card>
+               </div>
+            )}
           </>
         );
       }
 
-      ReactDOM.render(<App />, document.getElementById('root'));
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
     </script>
   </body>
 </html>
