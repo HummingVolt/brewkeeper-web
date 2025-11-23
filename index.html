@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <base target="_top">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BrewKeeper</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -28,18 +29,17 @@
       input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
       input[type="number"]{ -moz-appearance:textfield; }
 
-      /* Activity color classes (description text) */
-      .activity-payment  { color: #34D399; } /* emerald-400 for payment description */
-      .activity-credit   { color: #60A5FA; } /* sky-400 for credit description */
-      .activity-redeem   { color: #C084FC; } /* purple-400 for redeem description */
-      .activity-stamp    { color: #FBBF24; } /* amber-400 for stamp description */
-      .activity-default  { color: #E5E7EB; } /* gray-200 fallback for description */
-
-      /* Amount style: neutral but bolder for emphasis */
-      .amount {
-        color: #d1d5db; /* Tailwind gray-300 */
-        font-weight: 800;
-      }
+      /* Activity color classes */
+      .activity-payment  { color: #34D399; }
+      .activity-credit   { color: #60A5FA; }
+      .activity-redeem   { color: #C084FC; }
+      .activity-stamp    { color: #FBBF24; }
+      .activity-default  { color: #E5E7EB; }
+      .amount { color: #d1d5db; font-weight: 800; }
+      
+      /* Loader */
+      .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--color-coffee-primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
   </head>
 
@@ -49,21 +49,35 @@
     <script type="text/babel">
       const { useState, useEffect } = React;
 
+      // --- CONFIGURATION ---
+      // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
+      const API_URL = "https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec"; 
+      
       const FREE_ITEM_THRESHOLD = 9;
       const EARLY_REDEMPTION_THRESHOLD = 8;
-      const LOCAL_STORAGE_KEY = 'coffeeShopCustomers';
 
-      const loadCustomers = () => {
+      // API HELPER
+      // We use 'no-cors' for simple fire-and-forget or standard cors if script allows
+      // For GAS Web Apps returning JSON with "Anyone" access, standard fetch works nicely.
+      const apiCall = async (payload = null) => {
         try {
-          const json = localStorage.getItem(LOCAL_STORAGE_KEY);
-          return json ? JSON.parse(json) : [];
+          const options = payload ? {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          } : { method: 'GET' };
+          
+          // Using text/plain to avoid CORS preflight issues with GAS
+          if(payload) options.headers = { "Content-Type": "text/plain" };
+
+          const res = await fetch(API_URL, options);
+          const json = await res.json();
+          if(json.status === 'error') throw new Error(json.message);
+          return json.data;
         } catch (e) {
-          console.error(e);
-          return [];
+          console.error("API Error:", e);
+          alert("Connection error. Check internet or API URL.");
+          return null;
         }
-      };
-      const saveCustomers = (customers) => {
-        try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(customers)); } catch(e){ console.error(e); }
       };
 
       const Icon = ({ name, size=24, className='' })=>{
@@ -79,7 +93,8 @@
           wallet: <><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></>,
           checkCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
           alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></>,
-          star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
+          refresh: <path d="M23 4v6h-6M1 20v-6h6" />
         };
         return (
           <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -104,7 +119,6 @@
 
       const Card = ({ children, className='' }) => <div className={`bg-[var(--color-grey-medium)] rounded-2xl shadow-lg border border-[var(--color-grey-border)] ${className}`}>{children}</div>;
 
-      // History row (used in both history page and recent activity)
       const HistoryRow = ({ item }) => {
         let activityClass = 'activity-default';
         if (item.type === 'payment') activityClass = 'activity-payment';
@@ -112,7 +126,6 @@
         else if (item.type === 'purchase') {
           if (item.subType === 'credit') activityClass = 'activity-credit';
           else if (item.subType === 'stamp_only' || item.subType === 'stamp_skipped') activityClass = 'activity-stamp';
-          else activityClass = 'activity-default';
         }
 
         let amountLabel = '';
@@ -131,15 +144,14 @@
               <p className={`font-medium ${activityClass}`}>{item.description}</p>
               <p className="text-xs text-gray-400">{formatDateTime(item.date)}</p>
             </div>
-            <div className="text-sm amount">
-              {amountLabel}
-            </div>
+            <div className="text-sm amount">{amountLabel}</div>
           </div>
         );
       };
 
       function App(){
         const [customers, setCustomers] = useState([]);
+        const [loading, setLoading] = useState(false);
         const [view, setView] = useState('list');
         const [activeCustomerId, setActiveCustomerId] = useState(null);
         const [searchQuery, setSearchQuery] = useState('');
@@ -149,73 +161,77 @@
         const [historyFilterDate, setHistoryFilterDate] = useState('');
         const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
+        // Fetch on Load
         useEffect(()=>{
-          const raw = loadCustomers();
-          // sanitize and coerce numerical values so advance (negative credit) shows reliably
-          const sanitized = (raw || []).map(c => {
-            const creditVal = Number(c.credit);
-            const credit = Number.isFinite(creditVal) ? creditVal : 0;
-            const stampsVal = Number(c.stamps);
-            const stamps = Number.isFinite(stampsVal) ? Math.max(0, Math.floor(stampsVal)) : 0;
-            return {
-              ...c,
-              id: c.id || (crypto && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random()}`),
-              credit,
-              stamps,
-              skipNextStamp: !!c.skipNextStamp,
-              history: Array.isArray(c.history) ? c.history : []
-            };
-          });
-          setCustomers(sanitized);
+          fetchCustomers();
         },[]);
 
-        const persist = (next) => { setCustomers(next); saveCustomers(next); };
+        const fetchCustomers = async () => {
+          if(!API_URL.includes("http")) { alert("Please set the API_URL in the code first!"); return; }
+          setLoading(true);
+          const data = await apiCall(); // GET
+          if(data) setCustomers(data);
+          setLoading(false);
+        };
 
         const getActive = () => customers.find(c=>c.id===activeCustomerId);
 
-        const addCustomer = (e)=>{
+        // --- ACTIONS ---
+        // Instead of local persistence, we now send to API then refresh
+
+        const addCustomer = async (e)=>{
           e.preventDefault();
           if(!newCustomerName.trim()) return;
-          const nc = { id: (crypto && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random()}`), name:newCustomerName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
-          const next = [...customers, nc];
-          persist(next);
-          setNewCustomerName('');
-          setActiveCustomerId(nc.id);
-          setView('detail');
+          setLoading(true);
+          const nc = { id: `id-${Date.now()}`, name:newCustomerName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
+          
+          // Send to DB
+          const updatedList = await apiCall({ action: 'add', data: nc });
+          if(updatedList) {
+             setCustomers(updatedList);
+             setNewCustomerName('');
+             setActiveCustomerId(nc.id);
+             setView('detail');
+          }
+          setLoading(false);
         };
 
-        const deleteCustomer = (id) => {
-          const next = customers.filter(c => c.id !== id);
-          persist(next);
+        const deleteCustomer = async (id) => {
+          setLoading(true);
+          const updatedList = await apiCall({ action: 'delete', id: id });
+          if(updatedList) setCustomers(updatedList);
           setConfirmDeleteId(null);
           setActiveCustomerId(null);
           setView('list');
+          setLoading(false);
         };
 
-        const updateCustomer = (id, updates) => {
-          const next = customers.map(c => c.id === id ? { ...c, ...updates } : c);
-          persist(next);
+        const updateCustomer = async (id, updates) => {
+          setLoading(true);
+          const current = customers.find(c => c.id === id);
+          const updated = { ...current, ...updates };
+          
+          const updatedList = await apiCall({ action: 'update', data: updated });
+          if(updatedList) setCustomers(updatedList);
+          setLoading(false);
         };
 
         const updateActive = (updates) => updateCustomer(activeCustomerId, updates);
 
-        // Stamp-only: increments stamps, does NOT add credit
+        // Logic wrappers
         const stampOnly = () => {
           const c = getActive();
           if(!c) return;
           if(c.skipNextStamp){
-            const entry = { id: Date.now(), date: new Date().toISOString(), type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped (due to earlier early redemption)', amount:0 };
+            const entry = { id: Date.now(), date: new Date().toISOString(), type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 };
             updateActive({ skipNextStamp:false, history:[entry, ...c.history] });
             return;
           }
           const newStamps = Math.min(FREE_ITEM_THRESHOLD, c.stamps + 1);
-          // Updated description: "Stamp Added"
           const entry = { id: Date.now(), date:new Date().toISOString(), type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 };
           updateActive({ stamps:newStamps, history:[entry, ...c.history] });
         };
 
-        // Add credit (does NOT affect stamps)
-        const openCreditModal = () => { setCreditAmount(''); setView('credit_modal'); };
         const submitCredit = () => {
           const c = getActive();
           const amount = Number(creditAmount);
@@ -226,65 +242,33 @@
           setCreditAmount(''); setView('detail');
         };
 
-        // Redeem free coffee
         const redeem = () => {
           const c = getActive();
           if(!c) return;
           const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
-          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Coffee Redeemed (next stamp will be skipped)' : 'Free Coffee Redeemed (standard)', amount:0 };
+          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Redeemed' : 'Free Coffee Redeemed', amount:0 };
           updateActive({ stamps:0, skipNextStamp:isEarly, history:[entry, ...c.history] });
         };
 
-        // Cash received (renamed)
         const submitPayment = () => {
           const c = getActive();
           const amount = Number(paymentAmount);
           if(!c || isNaN(amount) || amount<=0) return;
           const newCredit = c.credit - amount;
-          const entry = {
-            id: Date.now(),
-            date: new Date().toISOString(),
-            type: 'payment',
-            description: 'Cash Received',
-            amount: -amount
-          };
+          const entry = { id: Date.now(), date: new Date().toISOString(), type: 'payment', description: 'Cash Received', amount: -amount };
           updateActive({ credit:newCredit, history:[entry, ...c.history] });
           setPaymentAmount(''); setView('detail');
         };
 
- const adjustStamps = (delta) => {
-  const c = getActive();
-  if (!c) return;
-  const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
-
-  let entry = null;
-  if (delta < 0) {
-    entry = {
-      id: Date.now(),
-      date: new Date().toISOString(),
-      type: 'purchase',
-      subType: 'stamp_removed',
-      description: 'Stamp Removed Manually',
-      amount: 0
-    };
-  } else if (delta > 0) {
-    entry = {
-      id: Date.now(),
-      date: new Date().toISOString(),
-      type: 'purchase',
-      subType: 'stamp_added_manual',
-      description: 'Stamp Added Manually',
-      amount: 0
-    };
-  }
-
-  updateActive({
-    stamps: newStamps,
-    history: entry ? [entry, ...c.history] : c.history
-  });
-};
-
-
+        const adjustStamps = (delta) => {
+          const c = getActive();
+          if (!c) return;
+          const newStamps = Math.max(0, Math.min(FREE_ITEM_THRESHOLD, c.stamps + delta));
+          let entry = null;
+          if (delta < 0) entry = { id: Date.now(), date: new Date().toISOString(), type: 'purchase', subType: 'stamp_removed', description: 'Stamp Removed Manually', amount: 0 };
+          else if (delta > 0) entry = { id: Date.now(), date: new Date().toISOString(), type: 'purchase', subType: 'stamp_added_manual', description: 'Stamp Added Manually', amount: 0 };
+          updateActive({ stamps: newStamps, history: entry ? [entry, ...c.history] : c.history });
+        };
 
         // Render helpers
         const renderList = ()=>{
@@ -296,7 +280,11 @@
                   <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
                   </div>
-                  <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full shadow-lg hover:bg-[var(--color-coffee-dark)] transition"><Icon name="plus" size={20} /></button>
+                  <div className="flex gap-2">
+                    {loading && <div className="loader"></div>}
+                    <button onClick={fetchCustomers} className="bg-stone-700 text-white p-2 rounded-full shadow-lg hover:bg-stone-600 transition"><Icon name="refresh" size={20}/></button>
+                    <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full shadow-lg hover:bg-[var(--color-coffee-dark)] transition"><Icon name="plus" size={20} /></button>
+                  </div>
                 </div>
                 <div className="relative">
                   <div className="absolute left-3 top-3 text-gray-400"><Icon name="search" size={18} /></div>
@@ -304,38 +292,38 @@
                 </div>
               </div>
 
-              {customers.length===0 ? (
-                <div className="p-4 text-center text-gray-400"><p>Welcome — add your first customer.</p></div>
-              ) : (
-                <div className="p-4 space-y-3">
-                  {filtered.length===0 ? (
-                    <div className="text-center py-10 text-gray-500"><Icon name="coffee" size={48} className="mx-auto opacity-20" /><p>No customers matching "{searchQuery}"</p></div>
-                  ) : filtered.map(c=>{
-                    // Ensure credit is numeric (sanity)
-                    const credit = Number.isFinite(Number(c.credit)) ? Number(c.credit) : 0;
-                    return (
-                      <div key={c.id} onClick={()=>{ setActiveCustomerId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl shadow-lg border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center">
-                        <div>
-                          <h3 className="font-bold text-white">{c.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            {/* Show Due if positive, Advance if negative, Settled otherwise.
-                                Use Math.abs for advance so the amount is visible */}
-                            {credit > 0 ? (
-                              <span className="px-2 py-1 rounded-md text-xs bg-red-900/50 text-red-400 font-bold uppercase">NPR {credit} Due</span>
-                            ) : credit < 0 ? (
-                              <span className="px-2 py-1 rounded-md text-xs bg-emerald-900/50 text-emerald-400 font-bold uppercase">NPR {Math.abs(credit)} Advance</span>
-                            ) : (
-                              <span className="px-2 py-1 rounded-md text-xs bg-stone-700 text-gray-300 font-bold uppercase">Settled</span>
-                            )}
-
-                            <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps} / {FREE_ITEM_THRESHOLD}</span>
+              {loading && customers.length === 0 ? <div className="p-10 text-center text-white">Loading database...</div> : (
+                <>
+                {customers.length===0 ? (
+                  <div className="p-4 text-center text-gray-400"><p>Welcome — add your first customer.</p></div>
+                ) : (
+                  <div className="p-4 space-y-3">
+                    {filtered.length===0 ? (
+                      <div className="text-center py-10 text-gray-500"><Icon name="coffee" size={48} className="mx-auto opacity-20" /><p>No customers matching "{searchQuery}"</p></div>
+                    ) : filtered.map(c=>{
+                      const credit = Number.isFinite(Number(c.credit)) ? Number(c.credit) : 0;
+                      return (
+                        <div key={c.id} onClick={()=>{ setActiveCustomerId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl shadow-lg border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center">
+                          <div>
+                            <h3 className="font-bold text-white">{c.name}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              {credit > 0 ? (
+                                <span className="px-2 py-1 rounded-md text-xs bg-red-900/50 text-red-400 font-bold uppercase">NPR {credit} Due</span>
+                              ) : credit < 0 ? (
+                                <span className="px-2 py-1 rounded-md text-xs bg-emerald-900/50 text-emerald-400 font-bold uppercase">NPR {Math.abs(credit)} Advance</span>
+                              ) : (
+                                <span className="px-2 py-1 rounded-md text-xs bg-stone-700 text-gray-300 font-bold uppercase">Settled</span>
+                              )}
+                              <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps} / {FREE_ITEM_THRESHOLD}</span>
+                            </div>
                           </div>
+                          <Icon name="chevronLeft" className="rotate-180 text-gray-500" />
                         </div>
-                        <Icon name="chevronLeft" className="rotate-180 text-gray-500" />
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
+                </>
               )}
             </div>
           );
@@ -352,14 +340,14 @@
                 <label className="block text-sm font-medium text-gray-300">Customer Name</label>
                 <input value={newCustomerName} onChange={e=>setNewCustomerName(e.target.value)} required placeholder="e.g. Ram Bahadur" className="w-full p-3 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
               </Card>
-              <Button type="submit" variant="primary" className="w-full"> <Icon name="plus" /> Create Customer</Button>
+              <Button type="submit" variant="primary" className="w-full" disabled={loading}>{loading ? 'Saving...' : 'Create Customer'}</Button>
             </form>
           </div>
         );
 
         const isoToLocalDate = (iso) => {
         const d = new Date(iso);
-            return d.toLocaleDateString('en-CA'); // Matches <input type="date"> format
+            return d.toLocaleDateString('en-CA');
         };
 
         const renderHistory = ()=>{
@@ -400,7 +388,7 @@
                 </div>
                 <div className="flex justify-end gap-3 mt-4">
                   <Button variant="secondary" onClick={()=>{ setPaymentAmount(''); setView('detail'); }}>Cancel</Button>
-                  <Button variant="primary" onClick={submitPayment} disabled={!paymentAmount || Number(paymentAmount)<=0}><Icon name="checkCircle" /> Cash Received</Button>
+                  <Button variant="primary" onClick={submitPayment} disabled={!paymentAmount || Number(paymentAmount)<=0 || loading}>{loading?'Saving...':'Cash Received'}</Button>
                 </div>
               </Card>
             </div>
@@ -414,14 +402,13 @@
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
               <Card className="w-full max-w-sm p-6">
                 <h3 className="text-xl font-bold text-white">Add Credit to Tab</h3>
-                <p className="text-sm text-gray-400">This adds to the customer's tab without awarding a stamp.</p>
                 <div>
                   <label className="text-sm text-gray-300 block mt-3">Amount (NPR)</label>
                   <input value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} type="number" min="1" step="any" className="w-full p-3 bg-stone-800 rounded-xl text-white outline-none" placeholder="e.g. 150" />
                 </div>
                 <div className="flex justify-end gap-3 mt-4">
                   <Button variant="secondary" onClick={()=>{ setCreditAmount(''); setView('detail'); }}>Cancel</Button>
-                  <Button variant="primary" onClick={submitCredit} disabled={!creditAmount || Number(creditAmount)<=0}><Icon name="creditCard" /> Add Credit</Button>
+                  <Button variant="primary" onClick={submitCredit} disabled={!creditAmount || Number(creditAmount)<=0 || loading}>{loading?'Saving...':'Add Credit'}</Button>
                 </div>
               </Card>
             </div>
@@ -457,8 +444,8 @@
                       <div className="flex items-center gap-3">
                         <p className="text-2xl font-bold text-[var(--color-coffee-primary)]">{c.stamps} <span className="text-sm font-normal text-stone-400">/ {FREE_ITEM_THRESHOLD}</span></p>
                         <div className="flex gap-1">
-                          <button onClick={()=>adjustStamps(-1)} disabled={c.stamps<=0} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="minus" size={12} /></button>
-                          <button onClick={()=>adjustStamps(1)} disabled={c.stamps>=FREE_ITEM_THRESHOLD} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="plus" size={12} /></button>
+                          <button onClick={()=>adjustStamps(-1)} disabled={c.stamps<=0 || loading} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="minus" size={12} /></button>
+                          <button onClick={()=>adjustStamps(1)} disabled={c.stamps>=FREE_ITEM_THRESHOLD || loading} className="p-1 bg-stone-700 rounded hover:bg-stone-600 text-white disabled:opacity-50"><Icon name="plus" size={12} /></button>
                         </div>
                       </div>
                     </div>
@@ -479,15 +466,15 @@
                     })}
                   </div>
 
-                  {eligible && <Button onClick={redeem} variant="primary" className="w-full"><Icon name="gift" /> Redeem Free Coffee</Button>}
-                  {earlyAvailable && <div className="space-y-2"><div className="flex items-start gap-2 p-3 bg-amber-900/30 rounded-lg text-amber-300 text-xs"><Icon name="alertCircle" size={16} /><p>Early redemption available ({c.stamps}/{FREE_ITEM_THRESHOLD}). It will skip the next stamp.</p></div><Button onClick={redeem} variant="secondary" className="w-full text-amber-400 border-amber-900/50 hover:bg-amber-900/30">Redeem Early (Skip Next)</Button></div>}
+                  {eligible && <Button onClick={redeem} variant="primary" className="w-full" disabled={loading}>{loading?'Processing...':<><Icon name="gift" /> Redeem Free Coffee</>}</Button>}
+                  {earlyAvailable && <div className="space-y-2"><div className="flex items-start gap-2 p-3 bg-amber-900/30 rounded-lg text-amber-300 text-xs"><Icon name="alertCircle" size={16} /><p>Early redemption available ({c.stamps}/{FREE_ITEM_THRESHOLD}). It will skip the next stamp.</p></div><Button onClick={redeem} variant="secondary" className="w-full text-amber-400 border-amber-900/50 hover:bg-amber-900/30" disabled={loading}>Redeem Early (Skip Next)</Button></div>}
                 </Card>
 
                 <Card className="p-5 space-y-4">
                   <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Quick Actions</h3>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <Button onClick={stampOnly} variant="primary" disabled={c.stamps >= FREE_ITEM_THRESHOLD}><Icon name="coffee" /> Stamp Only</Button>
+                    <Button onClick={stampOnly} variant="primary" disabled={c.stamps >= FREE_ITEM_THRESHOLD || loading}><Icon name="coffee" /> Stamp Only</Button>
                     <Button onClick={openCreditModal} variant="secondary"><Icon name="creditCard" /> Add Credit</Button>
                     <Button onClick={()=>setView('payment_modal')} variant="secondary" className="col-span-2"><Icon name="wallet" /> Cash Received</Button>
                   </div>
@@ -519,7 +506,7 @@
                 <p className="text-sm text-gray-300 mt-2">Delete profile for <span className="font-semibold text-white">{c.name}</span>? This removes all history.</p>
                 <div className="flex justify-end gap-3 mt-4">
                   <Button variant="secondary" onClick={()=>setConfirmDeleteId(null)}>Cancel</Button>
-                  <Button variant="primary" onClick={()=>deleteCustomer(c.id)}>Delete</Button>
+                  <Button variant="primary" onClick={()=>deleteCustomer(c.id)} disabled={loading}>{loading?'Deleting...':'Delete'}</Button>
                 </div>
               </Card>
             </div>
