@@ -51,22 +51,23 @@
 
       // --- CONFIGURATION ---
       // PASTE YOUR GOOGLE APPS SCRIPT URL HERE
-      const API_URL = "https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec"; 
+      const API_URL = "PASTE_YOUR_WEB_APP_URL_HERE"; 
       
       const FREE_ITEM_THRESHOLD = 9;
       const EARLY_REDEMPTION_THRESHOLD = 8;
 
       // API HELPER
-      // We use 'no-cors' for simple fire-and-forget or standard cors if script allows
-      // For GAS Web Apps returning JSON with "Anyone" access, standard fetch works nicely.
       const apiCall = async (payload = null) => {
         try {
+          if(!API_URL.includes("https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec")) { 
+             alert("Configuration Error: Please paste your Google Web App URL in the index.html file."); 
+             return null; 
+          }
           const options = payload ? {
             method: 'POST',
             body: JSON.stringify(payload)
           } : { method: 'GET' };
           
-          // Using text/plain to avoid CORS preflight issues with GAS
           if(payload) options.headers = { "Content-Type": "text/plain" };
 
           const res = await fetch(API_URL, options);
@@ -75,7 +76,7 @@
           return json.data;
         } catch (e) {
           console.error("API Error:", e);
-          alert("Connection error. Check internet or API URL.");
+          alert("Connection error: " + e.message);
           return null;
         }
       };
@@ -104,8 +105,11 @@
       };
 
       const formatDateTime = (iso) => {
-        const d = new Date(iso);
-        return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+        try {
+          if(!iso) return '';
+          const d = new Date(iso);
+          return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+        } catch(e) { return ''; }
       };
 
       const Button = ({ children, onClick, variant='primary', className='', disabled=false, type='button' })=>{
@@ -167,25 +171,21 @@
         },[]);
 
         const fetchCustomers = async () => {
-          if(!API_URL.includes("http")) { alert("Please set the API_URL in the code first!"); return; }
           setLoading(true);
           const data = await apiCall(); // GET
           if(data) setCustomers(data);
           setLoading(false);
         };
 
-        const getActive = () => customers.find(c=>c.id===activeCustomerId);
+        const getActive = () => customers.find(c=> String(c.id) === String(activeCustomerId));
 
         // --- ACTIONS ---
-        // Instead of local persistence, we now send to API then refresh
-
         const addCustomer = async (e)=>{
           e.preventDefault();
           if(!newCustomerName.trim()) return;
           setLoading(true);
           const nc = { id: `id-${Date.now()}`, name:newCustomerName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
           
-          // Send to DB
           const updatedList = await apiCall({ action: 'add', data: nc });
           if(updatedList) {
              setCustomers(updatedList);
@@ -208,7 +208,7 @@
 
         const updateCustomer = async (id, updates) => {
           setLoading(true);
-          const current = customers.find(c => c.id === id);
+          const current = customers.find(c => String(c.id) === String(id));
           const updated = { ...current, ...updates };
           
           const updatedList = await apiCall({ action: 'update', data: updated });
@@ -218,7 +218,6 @@
 
         const updateActive = (updates) => updateCustomer(activeCustomerId, updates);
 
-        // Logic wrappers
         const stampOnly = () => {
           const c = getActive();
           if(!c) return;
@@ -246,7 +245,7 @@
           const c = getActive();
           if(!c) return;
           const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
-          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Redeemed' : 'Free Coffee Redeemed', amount:0 };
+          const entry = { id: Date.now(), date:new Date().toISOString(), type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly ? 'Early Free Redeemed', amount:0 };
           updateActive({ stamps:0, skipNextStamp:isEarly, history:[entry, ...c.history] });
         };
 
@@ -352,7 +351,7 @@
 
         const renderHistory = ()=>{
           const c = getActive();
-          if(!c) return null;
+          if(!c) return <div className="p-10 text-white text-center">Loading history...</div>;
           const filtered = (c.history || []).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).filter(it => !historyFilterDate ? true : isoToLocalDate(it.date) === historyFilterDate);
           return (
             <div className="max-w-md mx-auto min-h-screen pb-6">
@@ -417,7 +416,17 @@
 
         const renderDetail = ()=>{
           const c = getActive();
-          if(!c) return null;
+          
+          // CRITICAL FIX: IF CUSTOMER NOT FOUND YET, SHOW LOADING INSTEAD OF BLACK SCREEN
+          if(!c) return (
+             <div className="min-h-screen bg-[var(--color-grey-dark)] flex flex-col items-center justify-center p-6 text-center">
+                <div className="loader mb-4"></div>
+                <h2 className="text-white text-xl font-bold">Syncing Data...</h2>
+                <p className="text-gray-400 mt-2">If this takes too long, the data might be out of sync.</p>
+                <button onClick={()=>{ fetchCustomers(); setView('list'); }} className="mt-6 px-4 py-2 bg-stone-700 text-white rounded-lg">Return to List</button>
+             </div>
+          );
+
           const eligible = c.stamps >= FREE_ITEM_THRESHOLD;
           const earlyAvailable = c.stamps >= EARLY_REDEMPTION_THRESHOLD && !eligible;
           return (
@@ -497,7 +506,7 @@
 
         const renderDeleteModal = ()=>{
           if(!confirmDeleteId) return null;
-          const c = customers.find(x=>x.id===confirmDeleteId);
+          const c = customers.find(x=> String(x.id) === String(confirmDeleteId));
           if(!c) return null;
           return (
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
