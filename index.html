@@ -5,25 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <title>BrewKeeper</title>
     
-    <!-- 1. STYLES -->
+    <!-- 1. STYLES (Inline to prevent loading errors) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       :root{ --color-coffee-primary: #6F4E37; --color-coffee-dark: #4B3621; --color-grey-dark: #0f1720; --color-grey-medium: #374151; --color-grey-border: #4B5563; }
-      body{ background:var(--color-grey-dark); margin:0; font-family: sans-serif; color: white; -webkit-tap-highlight-color: transparent; }
+      body{ background-color: #0f1720; margin:0; font-family: sans-serif; color: white; -webkit-tap-highlight-color: transparent; }
       #root { width: 100%; min-height: 100vh; }
+
+      /* Safe Mode UI (Plain HTML) */
+      #safe-mode {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #0f1720; z-index: 100;
+        transition: opacity 0.5s;
+      }
+      .safe-card { background: #374151; padding: 2rem; border-radius: 1rem; border: 1px solid #4B5563; max-width: 90%; width: 400px; text-align: center; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+      .safe-input { width: 100%; padding: 1rem; margin: 1rem 0; border-radius: 0.75rem; background: #1f2937; border: 1px solid #4B5563; color: white; font-size: 1rem; box-sizing: border-box; }
+      .safe-btn { background: #6F4E37; color: white; width: 100%; padding: 1rem; border-radius: 0.75rem; border: none; font-size: 1rem; font-weight: bold; cursor: pointer; }
+      .safe-btn:disabled { opacity: 0.7; cursor: not-allowed; }
       
-      /* Status UI */
-      #app-status { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; background: var(--color-grey-dark); transition: opacity 0.3s; }
-      .spinner { border: 4px solid #333; border-top: 4px solid var(--color-coffee-primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+      /* React App UI */
+      .spinner { 
+        border: 4px solid #333; border-top: 4px solid #6F4E37; border-radius: 50%; 
+        width: 40px !important; height: 40px !important; 
+        animation: spin 1s linear infinite; margin-bottom: 20px; 
+      }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      .error-box { background: #7f1d1d; color: white; padding: 20px; margin: 20px; border-radius: 8px; font-family: monospace; display: none; text-align: left; max-width: 90%; word-break: break-all; border: 1px solid #991b1b; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); }
       
-      /* App Utilities */
-      input, button { font-size: 16px; } 
       .stamp-filled{ background-color:var(--color-coffee-primary) !important; color:#fff !important; border:2px solid var(--color-coffee-dark) !important; }
       .stamp-empty{ background-color:var(--color-grey-medium) !important; color:#9ca3af !important; border:2px solid var(--color-grey-border) !important; }
       
-      /* Activity Colors */
       .activity-payment { color: #34D399; }
       .activity-credit { color: #60A5FA; }
       .activity-redeem { color: #C084FC; }
@@ -31,57 +42,136 @@
       .amount { color: #d1d5db; font-weight: 800; }
     </style>
 
-    <!-- 2. ERROR HANDLER -->
-    <script>
-      window.onerror = function(msg, url, line, col, error) {
-        var status = document.getElementById('app-status');
-        var errBox = document.getElementById('error-display');
-        var spinner = document.getElementById('loading-spinner');
-        var text = document.getElementById('status-text');
-        if(status && errBox) {
-          status.style.display = 'flex';
-          status.style.opacity = '1';
-          status.style.pointerEvents = 'auto';
-          if(spinner) spinner.style.display = 'none';
-          if(text) text.style.display = 'none';
-          errBox.style.display = 'block';
-          errBox.innerHTML = '<strong>App Error:</strong><br>' + msg + '<br><small>' + (url || 'inline') + ':' + line + '</small>';
-        }
-        return false;
-      };
-    </script>
-
-    <!-- 3. LIBRARIES (SWITCHED TO CLOUDFLARE FOR RELIABILITY) -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <!-- 2. ROBUST LIBRARIES (jsDelivr) -->
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@17/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   </head>
 
   <body>
-    <!-- LOADING SCREEN -->
-    <div id="app-status">
-      <div id="loading-spinner" class="spinner"></div>
-      <h2 id="status-text">Starting BrewKeeper...</h2>
-      <div id="error-display" class="error-box"></div>
+    
+    <!-- SAFE MODE SCREEN (Visible by default, hidden by React if successful) -->
+    <div id="safe-mode">
+      <div id="safe-content">
+        <div class="spinner"></div>
+        <p id="safe-status" style="color: #9ca3af; margin-top: 10px;">Loading App...</p>
+      </div>
     </div>
 
     <div id="root"></div>
 
-    <!-- 4. APP LOGIC -->
+    <!-- 3. SAFE MODE LOGIC (Plain JS) -->
+    <script>
+      // If React fails to load in 3 seconds, show manual connect screen
+      setTimeout(function() {
+        var root = document.getElementById('root');
+        if (!root || root.innerHTML === "") {
+          showSafeConnect("App took too long to load. Manual Connect:");
+        }
+      }, 3000);
+
+      function showSafeConnect(msg) {
+        var content = document.getElementById('safe-content');
+        if(!content) return;
+        var existingUrl = localStorage.getItem('BREWKEEPER_API_URL') || '';
+        
+        content.innerHTML = `
+          <div class="safe-card">
+            <h1 style="font-size: 1.5rem; font-weight: bold; color: white; margin-bottom: 0.5rem;">BrewKeeper</h1>
+            <p style="color: #9ca3af; font-size: 0.9rem; margin-bottom: 1rem;">${msg}</p>
+            <input id="manual-url" class="safe-input" placeholder="Paste Google Script URL here..." value="${existingUrl}">
+            <button onclick="manualSave()" class="safe-btn">Connect & Reload</button>
+          </div>
+        `;
+      }
+
+      function manualSave() {
+        var url = document.getElementById('manual-url').value.trim();
+        if(!url) return alert("Please enter the URL");
+        localStorage.setItem('https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec', url);
+        window.location.reload();
+      }
+
+      // Check for errors globally
+      window.onerror = function(msg) {
+        showSafeConnect("Error detected: " + msg);
+      };
+    </script>
+
+    <!-- 4. REACT APP LOGIC -->
     <script type="text/babel">
-      try {
-          // Verify Libraries
-          if (!window.React || !window.ReactDOM) {
-            throw new Error("React library failed to load. Please check your connection.");
+      // Verify React loaded
+      if (!window.React || !window.ReactDOM) {
+        document.getElementById('safe-status').innerText = "React failed to load. Checking connection...";
+        throw new Error("React Library Missing");
+      }
+
+      const { useState, useEffect } = React;
+      const FREE_ITEM_THRESHOLD = 9;
+      const EARLY_REDEMPTION_THRESHOLD = 8;
+      const LS_KEY = 'https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec';
+
+      // --- MAIN APP COMPONENT ---
+      function App() {
+        const [connected, setConnected] = useState(false);
+        const [customers, setCustomers] = useState([]);
+        const [loading, setLoading] = useState(false);
+        const [view, setView] = useState('list');
+        const [activeId, setActiveId] = useState(null);
+        const [searchQuery, setSearchQuery] = useState('');
+        
+        // Forms
+        const [newName, setNewName] = useState('');
+        const [amount, setAmount] = useState('');
+        const [histDate, setHistDate] = useState('');
+        const [delId, setDelId] = useState(null);
+
+        // ON MOUNT: Hide Safe Mode & Check Connection
+        useEffect(() => {
+          const safeMode = document.getElementById('safe-mode');
+          if (safeMode) safeMode.style.display = 'none'; // React took over!
+
+          const savedUrl = localStorage.getItem(LS_KEY);
+          if (savedUrl) {
+            setConnected(true);
+            loadData(savedUrl);
+          } else {
+            // If no URL, we let the SetupScreen render
           }
+        }, []);
 
-          const { useState, useEffect } = React;
-          const FREE_ITEM_THRESHOLD = 9;
-          const EARLY_REDEMPTION_THRESHOLD = 8;
-          const LS_KEY = 'https://script.google.com/macros/s/AKfycbwCzm1NpSq7A7K3MlGcTLWlWlj8-eBfTkh5EGgWAZAw5na7VK1wFw7CI5YkCFfYV091DA/exec';
+        const getUrl = () => localStorage.getItem(LS_KEY);
 
-          // --- COMPONENTS ---
-          const Icon = ({ name, size=24, className='' }) => {
+        const apiCall = async (payload = null, overrideUrl = null) => {
+          const url = overrideUrl || getUrl();
+          if(!url) throw new Error("Missing URL");
+          const options = payload ? { method: 'POST', body: JSON.stringify(payload), headers: {"Content-Type":"text/plain"} } : { method: 'GET' };
+          const res = await fetch(url, options);
+          if(!res.ok) throw new Error("Network Error");
+          const json = await res.json();
+          if(json.status === 'error') throw new Error(json.message);
+          return json.data;
+        };
+
+        const loadData = async (url) => {
+          setLoading(true);
+          try {
+            const data = await apiCall(null, url);
+            setCustomers(data || []);
+          } catch(e) {
+            console.error(e);
+            if(confirm("Connection failed. Re-enter URL?")) {
+              disconnect();
+            }
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const disconnect = () => { localStorage.removeItem(LS_KEY); setConnected(false); setCustomers([]); };
+
+        // --- RENDER HELPERS ---
+        const Icon = ({ name, size=24, className='' }) => {
             const icons = {
               coffee: <path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-3-4Z M6 1v3 M10 1v3 M14 1v3"/>,
               creditCard: <><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></>,
@@ -92,394 +182,79 @@
               trash2: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />,
               gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 4 12 8 12 8s1-4 4.5-4a2.5 2.5 0 0 1 0 5" /><path d="M12 12h.01" /></>,
               wallet: <><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></>,
-              checkCircle: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
-              alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></>,
               star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
               refresh: <path d="M23 4v6h-6M1 20v-6h6" />,
-              link: <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />,
-              logOut: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" />
+              logOut: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" />,
+              alertCircle: <><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></>
             };
             return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || <circle cx="12" cy="12" r="10" />}</svg>;
-          };
+        };
 
-          const Button = ({ children, onClick, variant='primary', className='', disabled=false }) => {
+        const Button = ({ children, onClick, variant='primary', className='', disabled=false }) => {
             const base = "px-4 py-3 rounded-xl font-semibold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm touch-manipulation";
-            const styles = {
-              primary: `bg-[var(--color-coffee-primary)] text-white hover:bg-[var(--color-coffee-dark)]`,
-              secondary: `bg-[var(--color-grey-medium)] text-white border border-[var(--color-grey-border)] hover:bg-stone-600`
-            };
+            const styles = { primary: `bg-[var(--color-coffee-primary)] text-white hover:bg-[var(--color-coffee-dark)]`, secondary: `bg-[var(--color-grey-medium)] text-white border border-[var(--color-grey-border)] hover:bg-stone-600` };
             return <button onClick={onClick} disabled={disabled} className={`${base} ${styles[variant] || styles.secondary} ${className}`}>{children}</button>;
-          };
+        };
+        const Card = ({ children, className='' }) => <div className={`bg-[var(--color-grey-medium)] rounded-2xl shadow-lg border border-[var(--color-grey-border)] ${className}`}>{children}</div>;
+        const formatDateTime = (iso) => { try { if(!iso) return ''; const d = new Date(iso); return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`; } catch(e) { return ''; } };
 
-          const Card = ({ children, className='' }) => <div className={`bg-[var(--color-grey-medium)] rounded-2xl shadow-lg border border-[var(--color-grey-border)] ${className}`}>{children}</div>;
-          
-          const formatDateTime = (iso) => {
-            try { if(!iso) return ''; const d = new Date(iso); return `${d.toLocaleDateString('en-US', {month:'short',day:'numeric'})} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`; } catch(e) { return ''; }
-          };
+        // --- ACTIONS ---
+        const doAction = async (action, payload={}) => {
+          setLoading(true);
+          try {
+            const newData = await apiCall({ action, ...payload });
+            if(newData) { setCustomers(newData); return true; }
+          } catch(e) { alert("Error: " + e.message); } finally { setLoading(false); }
+          return false;
+        };
 
-          // --- API ---
-          const apiCall = async (payload = null) => {
-            const url = localStorage.getItem(LS_KEY);
-            if(!url) throw new Error("Database URL missing.");
-            const options = payload ? { method: 'POST', body: JSON.stringify(payload), headers: { "Content-Type": "text/plain" } } : { method: 'GET' };
-            try {
-              const res = await fetch(url, options);
-              if(!res.ok) throw new Error("Network response was not ok");
-              const contentType = res.headers.get("content-type");
-              if (contentType && contentType.indexOf("application/json") === -1) {
-                throw new Error("Invalid Response. Check Google Script permissions (Must be 'Anyone').");
-              }
-              const json = await res.json();
-              if(json.status === 'error') throw new Error(json.message);
-              return json.data;
-            } catch (e) {
-              console.error("API Call Failed:", e);
-              throw e;
-            }
-          };
-
-          // --- SCREENS ---
-          const SetupScreen = ({ onConnect }) => {
-            const [url, setUrl] = useState('');
-            const [status, setStatus] = useState('idle');
-
-            const handleConnect = async (e) => {
-              e.preventDefault();
-              setStatus('testing');
-              const cleanUrl = url.trim();
-              
-              if(!cleanUrl.includes('script.google.com') || !cleanUrl.includes('/exec')) {
-                alert('Invalid URL. It must be a Google Script URL ending in /exec');
-                setStatus('idle');
-                return;
-              }
-
-              try {
-                await fetch(cleanUrl, { method: 'GET' }); // Simple ping
-                localStorage.setItem(LS_KEY, cleanUrl);
-                onConnect();
-              } catch(err) {
-                if(confirm("Connection check failed. This might be a CORS issue. If you are SURE the link is correct and set to 'Anyone', click OK to proceed.")) {
-                    localStorage.setItem(LS_KEY, cleanUrl);
-                    onConnect();
-                } else {
-                    setStatus('idle');
-                }
-              }
-            };
-
-            return (
-              <div className="min-h-screen flex items-center justify-center p-6">
-                <div className="w-full max-w-md space-y-6">
-                  <div className="text-center">
-                    <div className="w-20 h-20 bg-[var(--color-coffee-primary)] rounded-3xl mx-auto flex items-center justify-center mb-4 shadow-xl">
-                      <Icon name="coffee" size={40} className="text-white" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-white">BrewKeeper</h1>
-                    <p className="text-gray-400 mt-2">Connect your database.</p>
-                  </div>
-                  <Card className="p-6">
-                    <form onSubmit={handleConnect} className="space-y-4">
+        // --- SETUP SCREEN ---
+        if(!connected) {
+          return (
+            <div className="min-h-screen flex items-center justify-center p-6">
+              <div className="w-full max-w-md space-y-6">
+                <div className="text-center">
+                   <div className="w-20 h-20 bg-[var(--color-coffee-primary)] rounded-3xl mx-auto flex items-center justify-center mb-4 shadow-xl"><Icon name="coffee" size={40} className="text-white" /></div>
+                   <h1 className="text-3xl font-bold text-white">BrewKeeper</h1>
+                   <p className="text-gray-400 mt-2">Connect Database</p>
+                </div>
+                <Card className="p-6">
+                   <form onSubmit={(e) => {
+                      e.preventDefault();
+                      const url = e.target.url.value.trim();
+                      if(!url) return;
+                      localStorage.setItem(LS_KEY, url);
+                      setConnected(true);
+                      loadData(url);
+                   }} className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">Google Script URL</label>
-                        <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://script.google.com/.../exec" className="w-full p-4 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)] border border-stone-700" />
+                        <input name="url" defaultValue={localStorage.getItem(LS_KEY)||''} placeholder="https://script.google.com/.../exec" className="w-full p-4 bg-stone-800 text-white rounded-xl outline-none border border-stone-700 focus:border-[var(--color-coffee-primary)]" />
                       </div>
-                      <Button type="submit" variant="primary" className="w-full" disabled={!url || status==='testing'}>
-                        {status==='testing' ? 'Connecting...' : 'Connect Database'}
-                      </Button>
-                    </form>
-                  </Card>
-                </div>
+                      <Button type="submit" variant="primary" className="w-full">Connect</Button>
+                   </form>
+                </Card>
               </div>
-            );
-          };
+            </div>
+          );
+        }
 
-          function App() {
-            const [connected, setConnected] = useState(!!localStorage.getItem(LS_KEY));
-            const [customers, setCustomers] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [view, setView] = useState('list');
-            const [activeId, setActiveId] = useState(null);
-            const [searchQuery, setSearchQuery] = useState('');
-            
-            const [newName, setNewName] = useState('');
-            const [amount, setAmount] = useState('');
-            const [histDate, setHistDate] = useState('');
-            const [delId, setDelId] = useState(null);
+        // --- APP SCREENS ---
+        const getActive = () => customers.find(c => String(c.id) === String(activeId));
 
-            // Hide loader once App mounts
-            useEffect(() => {
-              const loader = document.getElementById('app-status');
-              if(loader) loader.style.display = 'none';
-              if(connected) loadData();
-            }, [connected]);
+        const handleAdd = async (e) => {
+             e.preventDefault(); if(!newName.trim()) return;
+             const nc = { id: 'id-'+Date.now(), name:newName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
+             if(await doAction('add', { data: nc })) { setNewName(''); setActiveId(nc.id); setView('detail'); }
+        };
 
-            const loadData = async () => {
-              setLoading(true);
-              try {
-                const data = await apiCall();
-                setCustomers(data || []);
-              } catch(e) {
-                if(e.message.includes("URL") || e.message.includes("permission")) {
-                  if(confirm("Database connection failed. Re-enter URL?")) disconnect();
-                } else {
-                  alert("Load Failed: " + e.message);
-                }
-              } finally {
-                setLoading(false);
-              }
-            };
-
-            const disconnect = () => { localStorage.removeItem(LS_KEY); setConnected(false); setCustomers([]); };
-            const getActive = () => customers.find(c => String(c.id) === String(activeId));
-
-            const doAction = async (action, payload={}) => {
-              setLoading(true);
-              try {
-                const newData = await apiCall({ action, ...payload });
-                if(newData) { setCustomers(newData); return true; }
-              } catch(e) { alert("Error: " + e.message); } finally { setLoading(false); }
-              return false;
-            };
-
-            const handleAdd = async (e) => {
-              e.preventDefault();
-              if(!newName.trim()) return;
-              const nc = { id: 'id-'+Date.now(), name:newName.trim(), credit:0, stamps:0, skipNextStamp:false, history:[], createdAt:new Date().toISOString() };
-              if(await doAction('add', { data: nc })) { setNewName(''); setActiveId(nc.id); setView('detail'); }
-            };
-
-            const handleTx = async (type) => { 
+        const handleTx = async (type) => { 
               const c = getActive(); if(!c) return;
               const val = Number(amount);
               let updates = {};
               let entry = { id: Date.now(), date: new Date().toISOString() };
-
-              if(type === 'credit') {
-                if(val <= 0) return;
-                updates = { credit: c.credit + val };
-                entry = { ...entry, type: 'purchase', subType: 'credit', description: 'Credit Added', amount: val };
-              } else if(type === 'payment') {
-                if(val <= 0) return;
-                updates = { credit: c.credit - val };
-                entry = { ...entry, type: 'payment', description: 'Cash Received', amount: -val };
-              } else if(type === 'stamp') {
-                if(c.stamps >= FREE_ITEM_THRESHOLD) return;
-                if(c.skipNextStamp) {
-                  updates = { skipNextStamp: false };
-                  entry = { ...entry, type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 };
-                } else {
-                  updates = { stamps: c.stamps + 1 };
-                  entry = { ...entry, type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 };
-                }
-              } else if(type === 'redeem') {
-                const isEarly = c.stamps < FREE_ITEM_THRESHOLD;
-                updates = { stamps: 0, skipNextStamp: isEarly };
-                entry = { ...entry, type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly?'Early Free Redeemed':'Free Coffee Redeemed', amount:0 };
-              } else if(type === 'adjust_plus') updates = { stamps: Math.min(FREE_ITEM_THRESHOLD, c.stamps+1) };
-                else if(type === 'adjust_minus') updates = { stamps: Math.max(0, c.stamps-1) };
-
-              if(type === 'credit' || type === 'payment') { setAmount(''); setView('detail'); }
-              if(Object.keys(updates).length > 0) {
-                const finalUpdates = { ...c, ...updates };
-                if(entry.type) finalUpdates.history = [entry, ...c.history];
-                await doAction('update', { data: finalUpdates });
-              }
-            };
-
-            if(!connected) return <SetupScreen onConnect={()=>setConnected(true)} />;
-
-            const renderList = () => {
-              const filtered = customers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
-              return (
-                <div className="max-w-md mx-auto min-h-screen pb-20">
-                  <div className="bg-[var(--color-grey-dark)] p-6 sticky top-0 z-10 border-b border-[var(--color-grey-border)]">
-                    <div className="flex justify-between items-center mb-4">
-                      <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Icon name="coffee" className="text-[var(--color-coffee-primary)]" /> BrewKeeper</h1>
-                      <div className="flex gap-2">
-                        {loading && <div className="spinner" style={{width:20, height:20, borderWidth:2, marginBottom:0}}></div>}
-                        <button onClick={disconnect} className="p-2 text-stone-600 hover:text-red-400"><Icon name="logOut" size={20}/></button>
-                        <button onClick={loadData} className="bg-stone-700 text-white p-2 rounded-full hover:bg-stone-600"><Icon name="refresh" size={20}/></button>
-                        <button onClick={()=>setView('new')} className="bg-[var(--color-coffee-primary)] text-white p-2 rounded-full hover:bg-[var(--color-coffee-dark)]"><Icon name="plus" size={20} /></button>
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <div className="absolute left-3 top-3 text-gray-400"><Icon name="search" size={18} /></div>
-                      <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search..." className="w-full pl-10 pr-4 py-2 bg-stone-800 text-white rounded-xl outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
-                    </div>
-                  </div>
-                  {loading && customers.length===0 ? <div className="p-10 text-center text-stone-500">Loading...</div> : (
-                    <div className="p-4 space-y-3">
-                      {filtered.length===0 ? <div className="text-center py-10 text-stone-600">No customers found.</div> : filtered.map(c=>(
-                        <div key={c.id} onClick={()=>{ setActiveId(c.id); setView('detail'); }} className="bg-[var(--color-grey-medium)] p-4 rounded-xl border border-[var(--color-grey-border)] cursor-pointer flex justify-between items-center hover:bg-stone-700 transition">
-                          <div>
-                            <h3 className="font-bold text-white">{c.name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${c.credit>0?'bg-red-900/50 text-red-400':c.credit<0?'bg-emerald-900/50 text-emerald-400':'bg-stone-700 text-stone-300'}`}>{c.credit>0?`Due ${c.credit}`:c.credit<0?`Adv ${Math.abs(c.credit)}`:'Settled'}</span>
-                              <span className="text-xs text-gray-400 flex items-center gap-1"><Icon name="star" size={12} className="text-[var(--color-coffee-primary)]" />{c.stamps}/{FREE_ITEM_THRESHOLD}</span>
-                            </div>
-                          </div>
-                          <Icon name="chevronLeft" className="rotate-180 text-stone-500" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            };
-
-            const renderDetail = () => {
-              const c = getActive();
-              if(!c) return <div className="p-10 text-center text-white">Loading customer... <br/><button onClick={loadData} className="text-[var(--color-coffee-primary)] mt-4">Reload</button></div>;
-              const eligible = c.stamps >= FREE_ITEM_THRESHOLD;
-              const early = c.stamps >= EARLY_REDEMPTION_THRESHOLD && !eligible;
-              return (
-                <div className="max-w-md mx-auto min-h-screen pb-6">
-                  <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
-                    <button onClick={()=>setView('list')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
-                    <h2 className="font-bold text-lg flex-1 truncate text-white">{c.name}</h2>
-                    <button onClick={()=>setDelId(c.id)} className="text-red-400 hover:text-red-300"><Icon name="trash2" /></button>
-                  </div>
-                  <div className="p-4 space-y-6">
-                    <Card className="p-5">
-                      <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider mb-2">Balance</h3>
-                      <div className="flex justify-between items-center">
-                        <p className={`text-4xl font-extrabold ${c.credit>0?'text-red-400':'text-emerald-400'}`}>NPR {Math.abs(c.credit)}</p>
-                        <div className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-stone-700 text-gray-300">{c.credit>0?'DUE':c.credit<0?'ADVANCE':'CLEARED'}</div>
-                      </div>
-                    </Card>
-                    <Card className="p-5 space-y-4 relative overflow-hidden">
-                      <div className="flex justify-between items-end relative z-10">
-                        <div>
-                          <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Loyalty</h3>
-                          <div className="flex items-center gap-3">
-                            <p className="text-2xl font-bold text-[var(--color-coffee-primary)]">{c.stamps} <span className="text-sm font-normal text-stone-400">/ {FREE_ITEM_THRESHOLD}</span></p>
-                            <div className="flex gap-1">
-                              <button onClick={()=>handleTx('adjust_minus')} disabled={loading} className="p-1 bg-stone-700 rounded text-white"><Icon name="minus" size={12} /></button>
-                              <button onClick={()=>handleTx('adjust_plus')} disabled={loading} className="p-1 bg-stone-700 rounded text-white"><Icon name="plus" size={12} /></button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="absolute -right-4 -top-4 opacity-10 text-[var(--color-coffee-primary)]"><Icon name="coffee" size={96} /></div>
-                      {c.skipNextStamp && <div className="flex items-center gap-2 p-3 bg-red-900/30 rounded-lg text-red-300 text-xs font-semibold"><Icon name="alertCircle" size={16} /> <p>Stamp Skipped (Next Purchase)</p></div>}
-                      <div className="grid grid-cols-5 gap-3 mb-2 relative z-10">
-                        {[...Array(FREE_ITEM_THRESHOLD + 1)].map((_,i)=>{
-                          const isFree = i===FREE_ITEM_THRESHOLD; const filled = i < c.stamps;
-                          return <div key={i} className={`aspect-square rounded-lg flex items-center justify-center ${isFree ? (eligible ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 animate-pulse border-2 border-dashed' : 'border-dashed border-2 border-stone-600') : (filled ? 'stamp-filled' : 'stamp-empty')}`}>{isFree ? <Icon name="gift" /> : <Icon name="coffee" size={16} />}</div>;
-                        })}
-                      </div>
-                      {eligible && <Button onClick={()=>handleTx('redeem')} className="w-full" disabled={loading}>{loading?'...':'Redeem Free Coffee'}</Button>}
-                      {early && <Button onClick={()=>handleTx('redeem')} variant="secondary" className="w-full text-amber-400 border-amber-900" disabled={loading}>Redeem Early (Skip Next)</Button>}
-                    </Card>
-                    <div className="grid grid-cols-2 gap-3">
-                        <Button onClick={()=>handleTx('stamp')} disabled={loading || c.stamps>=FREE_ITEM_THRESHOLD}><Icon name="coffee" /> Stamp Only</Button>
-                        <Button onClick={()=>{ setAmount(''); setView('credit_modal'); }} variant="secondary"><Icon name="creditCard" /> Add Credit</Button>
-                        <Button onClick={()=>{ setAmount(''); setView('payment_modal'); }} variant="secondary" className="col-span-2"><Icon name="wallet" /> Cash Received</Button>
-                    </div>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-stone-400 text-xs uppercase font-bold tracking-wider">Activity</h3>
-                            <button onClick={()=>setView('history')} className="text-sm text-stone-400">View All</button>
-                        </div>
-                        {(c.history||[]).slice(0,3).map(h=>(
-                            <div key={h.id} className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
-                                <div><p className={`font-medium ${h.type==='payment'?'activity-payment':h.type==='redeem'?'activity-redeem':h.subType==='credit'?'activity-credit':'activity-stamp'}`}>{h.description}</p><p className="text-xs text-stone-500">{formatDateTime(h.date)}</p></div>
-                                <div className="text-sm amount">{h.amount ? `NPR ${Math.abs(h.amount)}` : ''}</div>
-                            </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            };
-
-            const renderHistory = () => {
-              const c = getActive();
-              if(!c) return null;
-              const list = (c.history||[]).filter(h=> !histDate || h.date.startsWith(histDate));
-              return (
-                <div className="max-w-md mx-auto min-h-screen pb-6">
-                  <div className="bg-[var(--color-grey-dark)] p-4 sticky top-0 z-10 flex items-center gap-4 border-b border-[var(--color-grey-border)]">
-                    <button onClick={()=>setView('detail')} className="p-2 hover:bg-stone-800 rounded-full"><Icon name="chevronLeft" className="text-white" /></button>
-                    <h2 className="font-bold text-lg text-white">History: {c.name}</h2>
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <input type="date" value={histDate} onChange={e=>setHistDate(e.target.value)} className="w-full p-3 bg-stone-800 text-white rounded-xl outline-none" />
-                    {list.map(h=>(
-                        <div key={h.id} className="bg-[var(--color-grey-medium)] p-3 rounded-lg border border-[var(--color-grey-border)] flex justify-between items-center">
-                            <div><p className={`font-medium ${h.type==='payment'?'activity-payment':h.type==='redeem'?'activity-redeem':h.subType==='credit'?'activity-credit':'activity-stamp'}`}>{h.description}</p><p className="text-xs text-stone-500">{formatDateTime(h.date)}</p></div>
-                            <div className="text-sm amount">{h.amount ? `NPR ${Math.abs(h.amount)}` : ''}</div>
-                        </div>
-                    ))}
-                    {list.length===0 && <p className="text-center text-stone-500">No records.</p>}
-                  </div>
-                </div>
-              );
-            };
-
-            const renderTxModal = (type) => (
-              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                  <Card className="w-full max-w-sm p-6 space-y-4">
-                    <h3 className="text-xl font-bold text-white">{type==='credit'?'Add Credit to Tab':'Cash Received'}</h3>
-                    <input autoFocus type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Amount (NPR)" className="w-full p-4 bg-stone-800 text-white rounded-xl text-lg outline-none focus:ring-2 focus:ring-[var(--color-coffee-primary)]" />
-                    <div className="flex gap-3 pt-2">
-                        <Button onClick={()=>setView('detail')} variant="secondary" className="flex-1">Cancel</Button>
-                        <Button onClick={()=>handleTx(type)} disabled={loading || !amount} className="flex-1">Confirm</Button>
-                    </div>
-                  </Card>
-              </div>
-            );
-
-            const renderNewModal = () => (
-              <div className="max-w-md mx-auto min-h-screen">
-                  <div className="bg-[var(--color-grey-dark)] p-4 flex gap-4 items-center"><button onClick={()=>setView('list')}><Icon name="chevronLeft" className="text-white"/></button><h2 className="text-white font-bold text-lg">New Customer</h2></div>
-                  <form onSubmit={handleAdd} className="p-4 space-y-4">
-                      <Card className="p-4"><label className="text-sm text-stone-400">Name</label><input autoFocus value={newName} onChange={e=>setNewName(e.target.value)} className="w-full mt-2 p-3 bg-stone-800 text-white rounded-xl outline-none" placeholder="Enter name" /></Card>
-                      <Button type="submit" disabled={loading} className="w-full">Create</Button>
-                  </form>
-              </div>
-            );
-
-            return (
-              <React.Fragment>
-                {view==='list' && renderList()}
-                {view==='detail' && renderDetail()}
-                {view==='history' && renderHistory()}
-                {view==='new' && renderNewModal()}
-                {view==='credit_modal' && renderTxModal('credit')}
-                {view==='payment_modal' && renderTxModal('payment')}
-                {delId && (
-                  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                    <Card className="w-full max-w-sm p-6 text-center space-y-4">
-                      <h3 className="text-xl font-bold text-red-400">Delete Customer?</h3>
-                      <div className="flex gap-3">
-                        <Button onClick={()=>setDelId(null)} variant="secondary" className="flex-1">Cancel</Button>
-                        <Button onClick={async ()=>{ if(await doAction('delete', {id:delId})) { setDelId(null); setView('list'); } }} variant="primary" className="flex-1 bg-red-600 hover:bg-red-700">Delete</Button>
-                      </div>
-                    </Card>
-                  </div>
-                )}
-              </React.Fragment>
-            );
-          }
-
-          const root = ReactDOM.createRoot(document.getElementById('root'));
-          root.render(<App />);
-
-      } catch (err) {
-        // CATCH ANY INITIALIZATION ERRORS
-        console.error(err);
-        const status = document.getElementById('app-status');
-        const errBox = document.getElementById('error-display');
-        const spinner = document.getElementById('loading-spinner');
-        if(status && errBox) {
-          status.style.pointerEvents = 'auto';
-          if(spinner) spinner.style.display = 'none';
-          errBox.style.display = 'block';
-          errBox.innerHTML = '<strong>Setup Error:</strong><br>' + err.message;
-        }
-      }
-    </script>
-  </body>
-</html>
+              if(type === 'credit') { if(val <= 0) return; updates = { credit: c.credit + val }; entry = { ...entry, type: 'purchase', subType: 'credit', description: 'Credit Added', amount: val }; } 
+              else if(type === 'payment') { if(val <= 0) return; updates = { credit: c.credit - val }; entry = { ...entry, type: 'payment', description: 'Cash Received', amount: -val }; } 
+              else if(type === 'stamp') { if(c.stamps >= FREE_ITEM_THRESHOLD) return; if(c.skipNextStamp) { updates = { skipNextStamp: false }; entry = { ...entry, type:'purchase', subType:'stamp_skipped', description:'Stamp Skipped', amount:0 }; } else { updates = { stamps: c.stamps + 1 }; entry = { ...entry, type:'purchase', subType:'stamp_only', description:'Stamp Added', amount:0 }; } } 
+              else if(type === 'redeem') { const isEarly = c.stamps < FREE_ITEM_THRESHOLD; updates = { stamps: 0, skipNextStamp: isEarly }; entry = { ...entry, type:'redeem', subType: isEarly ? 'early_free' : 'standard_free', description: isEarly?'Early Free Redeemed':'Free Coffee Redeemed', amount:0 }; } 
+              else if(type === 'adjust
